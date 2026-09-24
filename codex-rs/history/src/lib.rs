@@ -1,5 +1,10 @@
 //! Model-history and persisted-rollout domain types.
 
+mod heartbeat;
+pub use heartbeat::HEARTBEAT_CONTENT_KIND;
+pub use heartbeat::Heartbeat;
+pub use heartbeat::UserInputOrigin;
+
 mod compaction_resume_metadata;
 pub use compaction_resume_metadata::CompactionResumeMetadata;
 pub use compaction_resume_metadata::PreviousTurnSettings;
@@ -119,6 +124,7 @@ where
     Ok(Some(serde_json::from_value(value).unwrap_or_else(|_| {
         McpAttribution {
             status: McpAttributionStatus::AttributionError,
+            error_reason: None,
             sources: Vec::new(),
         }
     })))

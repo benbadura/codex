@@ -553,6 +553,12 @@
         "experimental_show_cell_overhead": {
           "description": "Show handler duration, code-mode host duration, and harness overhead in each code-mode cell response. Experimental: this option and the response format may change or be removed.",
           "type": "boolean"
+        },
+        "tool_input_schema_max_bytes": {
+          "description": "Maximum UTF-8 bytes per rendered tool input type, with a 16,000-byte minimum and default. For ordinary MCP tools, this is also at least their server's explicitly configured input limit.",
+          "format": "uint",
+          "minimum": 1.0,
+          "type": "integer"
         }
       },
       "type": "object"
@@ -787,6 +793,9 @@
               "type": "boolean"
             },
             "default_mode_request_user_input": {
+              "type": "boolean"
+            },
+            "defer_mailbox_preemption": {
               "type": "boolean"
             },
             "deferred_executor": {
@@ -2361,6 +2370,10 @@
         "client_id": {
           "description": "Explicit OAuth client identifier to present during authorization and token exchange.",
           "type": "string"
+        },
+        "client_secret": {
+          "description": "OAuth client secret used for token exchange with a pre-registered client.",
+          "type": "string"
         }
       },
       "type": "object"
@@ -2385,6 +2398,25 @@
         }
       },
       "type": "object"
+    },
+    "McpStartupReadiness": {
+      "description": "Readiness needed before startup can expose this server's tools to the model.",
+      "oneOf": [
+        {
+          "description": "Use the live connection to determine startup readiness.",
+          "enum": [
+            "connection"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Allow a valid cached tool catalog while the live connection starts. Tool execution still requires the current connection.",
+          "enum": [
+            "catalog"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "MemoriesToml": {
       "additionalProperties": false,
@@ -3191,6 +3223,10 @@
           "description": "Opt in to logging final main-agent and spawned-subagent responses to an OTLP log exporter. Defaults to false. Response text can be sensitive and is capped at 64 KiB.",
           "type": "boolean"
         },
+        "log_guardian_assessments": {
+          "description": "Opt in to logging completed Guardian assessments to an OTLP log exporter. Defaults to false. Rationales can be sensitive and are capped at 64 KiB.",
+          "type": "boolean"
+        },
         "log_user_prompt": {
           "description": "Log user prompt in traces",
           "type": "boolean"
@@ -3648,6 +3684,15 @@
           },
           "type": "array"
         },
+        "startup_readiness": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/McpStartupReadiness"
+            }
+          ],
+          "default": null,
+          "description": "Whether startup requires a live connection or can use a valid cached tool catalog."
+        },
         "startup_timeout_ms": {
           "default": null,
           "format": "uint64",
@@ -3662,6 +3707,13 @@
         "supports_parallel_tool_calls": {
           "default": null,
           "type": "boolean"
+        },
+        "tool_input_schema_max_bytes": {
+          "default": null,
+          "description": "UTF-8 byte threshold for compacting each ordinary MCP tool input schema. Defaults to 5,000 bytes. Code Mode also uses an explicitly configured limit when rendering each tool's input type. Larger limits preserve more parameter descriptions.",
+          "format": "uint",
+          "minimum": 1.0,
+          "type": "integer"
         },
         "tool_timeout_sec": {
           "default": null,
@@ -4541,6 +4593,11 @@
           ],
           "default": "composer",
           "description": "Where the terminal pet should anchor vertically.\n\nDefaults to `composer`, which follows the current TUI composer viewport."
+        },
+        "prompt_suggestions": {
+          "default": false,
+          "description": "Suggest a next message after successful turns. Defaults to `false`.",
+          "type": "boolean"
         },
         "question_esc_back": {
           "default": true,
@@ -6729,6 +6786,9 @@
           "type": "boolean"
         },
         "default_mode_request_user_input": {
+          "type": "boolean"
+        },
+        "defer_mailbox_preemption": {
           "type": "boolean"
         },
         "deferred_executor": {

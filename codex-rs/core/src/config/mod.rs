@@ -773,6 +773,9 @@ pub struct Config {
     /// Generate automatic TUI recaps. Manual `/recap` remains available when disabled.
     pub tui_auto_recap: bool,
 
+    /// Generate suggested next messages in the TUI composer.
+    pub tui_prompt_suggestions: bool,
+
     /// Persisted startup availability NUX state for model tooltips.
     pub model_availability_nux: ModelAvailabilityNuxConfig,
 
@@ -1153,6 +1156,7 @@ pub struct CodeModeConfig {
     /// in each code-mode cell response.
     /// Experimental: this option and the response format may change or be removed.
     pub experimental_show_cell_overhead: bool,
+    pub tool_input_schema_max_bytes: Option<usize>,
     pub excluded_tool_namespaces: Vec<String>,
     pub direct_only_tool_namespaces: Vec<String>,
     /// Keep code mode fail-closed when the standalone host is unavailable.
@@ -1164,6 +1168,7 @@ impl Default for CodeModeConfig {
         Self {
             default_exec_yield_time_ms: DEFAULT_CODE_MODE_EXEC_YIELD_TIME_MS,
             experimental_show_cell_overhead: false,
+            tool_input_schema_max_bytes: None,
             excluded_tool_namespaces: Vec::new(),
             direct_only_tool_namespaces: Vec::new(),
             disable_in_process_fallback: false,
@@ -2721,6 +2726,9 @@ fn resolve_code_mode_config(config_toml: &ConfigToml) -> CodeModeConfig {
         experimental_show_cell_overhead: base
             .and_then(|config| config.experimental_show_cell_overhead)
             .unwrap_or_default(),
+        tool_input_schema_max_bytes: base
+            .and_then(|config| config.tool_input_schema_max_bytes)
+            .map(NonZeroUsize::get),
         excluded_tool_namespaces: base
             .and_then(|config| config.excluded_tool_namespaces.as_ref())
             .cloned()
@@ -4458,6 +4466,7 @@ impl Config {
                 .map(|t| t.show_server_version_notice)
                 .unwrap_or(true),
             tui_auto_recap: cfg.tui.as_ref().map(|t| t.auto_recap).unwrap_or(/*default*/ true),
+            tui_prompt_suggestions: cfg.tui.as_ref().is_some_and(|t| t.prompt_suggestions),
             model_availability_nux: cfg
                 .tui
                 .as_ref()

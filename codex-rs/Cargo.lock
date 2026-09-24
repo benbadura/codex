@@ -2126,6 +2126,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pretty_assertions",
+ "rcgen",
  "rmcp",
  "serde",
  "serde_json",
@@ -2140,6 +2141,7 @@ dependencies = [
  "tikv-jemallocator",
  "time",
  "tokio",
+ "tokio-rustls",
  "tokio-tungstenite",
  "tokio-util",
  "toml 0.9.11+spec-1.1.0",
@@ -2529,6 +2531,7 @@ dependencies = [
  "codex-utils-path",
  "codex-utils-path-uri",
  "codex-utils-pty",
+ "codex-utils-redacted-string",
  "codex-websocket-auth",
  "codex-windows-sandbox",
  "crossterm",
@@ -3358,6 +3361,7 @@ dependencies = [
  "codex-login",
  "codex-protocol",
  "codex-rollout",
+ "codex-state",
  "flate2",
  "http 1.4.0",
  "httpdate",
@@ -3702,6 +3706,9 @@ name = "codex-keyring-store"
 version = "0.0.0"
 dependencies = [
  "keyring",
+ "pretty_assertions",
+ "secret-service",
+ "security-framework 3.5.1",
  "tracing",
 ]
 

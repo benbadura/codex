@@ -82,6 +82,9 @@ const ONE_PIXEL_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ
 #[path = "scenarios_agent_message_board.rs"]
 mod agent_message_board;
 
+#[path = "scenarios_mailbox_preemption_tests.rs"]
+mod mailbox_preemption;
+
 #[path = "scenarios_guardian_extra_policy.rs"]
 mod guardian_extra_policy;
 
@@ -90,6 +93,9 @@ mod indirect_namespace_prefixes;
 
 #[path = "scenarios_mcp_resource_messages.rs"]
 mod mcp_resource_messages;
+
+#[path = "scenarios_guardian_heartbeat.rs"]
+mod guardian_heartbeat;
 
 #[path = "scenarios_preparation.rs"]
 mod preparation;
@@ -213,6 +219,23 @@ fn configure_scenario_catalog(config: &mut Config) {
     .expect("fixture config layers");
     config.model_catalog = Some(bundled_models_response().expect("bundled model catalog"));
     config.cloud_skill_enabled = false;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn code_mode_mcp_schema_limits_preserve_explicit_overrides() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+    let requests = super::code_mode::mcp_schema_max_bytes_scenario().await?;
+    insta::assert_snapshot!(
+        "code_mode_mcp_schema_limits",
+        context_snapshot::format_request_history_snapshot(
+            "Code Mode exposes explicit MCP schema limits in its prompt and runtime tool catalog.",
+            &requests,
+            &ContextSnapshotOptions::default()
+                .rewrite_known_segments()
+                .include_request_settings(),
+        )
+    );
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

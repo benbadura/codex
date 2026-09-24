@@ -13,6 +13,7 @@ pub use crate::mcp_types::McpServerEnvVar;
 pub use crate::mcp_types::McpServerOAuthConfig;
 pub use crate::mcp_types::McpServerToolConfig;
 pub use crate::mcp_types::McpServerTransportConfig;
+pub use crate::mcp_types::McpStartupReadiness;
 pub use crate::mcp_types::RawMcpServerConfig;
 pub use crate::shell_environment_policy::ShellEnvironmentPolicyToml;
 pub use codex_protocol::config_types::AltScreenMode;
@@ -604,6 +605,9 @@ pub struct OtelConfigToml {
     /// Opt in to logging final main-agent and spawned-subagent responses to an OTLP log exporter.
     /// Defaults to false. Response text can be sensitive and is capped at 64 KiB.
     pub log_agent_responses: Option<bool>,
+    /// Opt in to logging completed Guardian assessments to an OTLP log exporter.
+    /// Defaults to false. Rationales can be sensitive and are capped at 64 KiB.
+    pub log_guardian_assessments: Option<bool>,
 
     /// Mark traces with environment (dev, staging, prod, test). Defaults to dev.
     pub environment: Option<String>,
@@ -630,6 +634,7 @@ pub struct OtelConfig {
     pub tool_result: codex_protocol::config_types::ToolResultLogConfig,
     pub log_user_prompt: bool,
     pub log_agent_responses: bool,
+    pub log_guardian_assessments: bool,
     pub environment: String,
     pub exporter: OtelExporterKind,
     pub trace_exporter: OtelExporterKind,
@@ -644,6 +649,7 @@ impl Default for OtelConfig {
             tool_result: Default::default(),
             log_user_prompt: false,
             log_agent_responses: false,
+            log_guardian_assessments: false,
             environment: DEFAULT_OTEL_ENVIRONMENT.to_owned(),
             exporter: OtelExporterKind::None,
             trace_exporter: OtelExporterKind::None,
@@ -658,6 +664,15 @@ impl OtelConfig {
     /// Response text requires a separate opt-in and an explicit OTLP log destination.
     pub fn agent_response_logging_enabled(&self) -> bool {
         self.log_agent_responses
+            && matches!(
+                self.exporter,
+                OtelExporterKind::OtlpHttp { .. } | OtelExporterKind::OtlpGrpc { .. }
+            )
+    }
+
+    /// Assessment text requires an explicit opt-in and an OTLP log destination.
+    pub fn guardian_assessment_logging_enabled(&self) -> bool {
+        self.log_guardian_assessments
             && matches!(
                 self.exporter,
                 OtelExporterKind::OtlpHttp { .. } | OtelExporterKind::OtlpGrpc { .. }
@@ -806,6 +821,10 @@ pub struct Tui {
     /// Defaults to `true`. Disabling this leaves `/recap` available on demand.
     #[serde(default = "default_true")]
     pub auto_recap: bool,
+
+    /// Suggest a next message after successful turns. Defaults to `false`.
+    #[serde(default)]
+    pub prompt_suggestions: bool,
 
     /// When true, disables burst-paste detection for typed input entirely.
     /// All characters are inserted as they are received, and no buffering
