@@ -9,6 +9,11 @@ on:
         description: Existing GitHub Release tag to rebuild and update.
         required: true
         type: string
+      source_ref:
+        description: Git ref to build. Leave empty to build the release tag.
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: codex-v2-release-${{ github.event.release.id || inputs.tag }}
@@ -25,23 +30,29 @@ jobs:
     outputs:
       package-version: ${{ steps.package.outputs.version }}
       release-tag: ${{ steps.release.outputs.tag }}
+      source_ref: ${{ steps.release.outputs.source_ref }}
     steps:
       - name: Resolve release tag
         id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
           if [[ -z "${RELEASE_TAG}" ]]; then
             echo "Release tag is empty." >&2
             exit 1
           fi
+          if [[ -z "${SOURCE_REF}" ]]; then
+            SOURCE_REF="${RELEASE_TAG}"
+          fi
           echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "source_ref=${SOURCE_REF}" >> "${GITHUB_OUTPUT}"
 
-      - name: Checkout released source
+      - name: Checkout package source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ steps.release.outputs.tag }}
+          ref: ${{ steps.release.outputs.source_ref }}
           persist-credentials: false
 
       - name: Read package version from tag
@@ -72,10 +83,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout released source
+      - name: Checkout package source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.metadata.outputs.release-tag }}
+          ref: ${{ needs.metadata.outputs.source_ref }}
           persist-credentials: false
 
       - name: Test package and installer paths
@@ -102,13 +113,15 @@ jobs:
         include:
           - runner: macos-15
             target: aarch64-apple-darwin
-          - runner: windows-2025
+            use_sccache: "true"
+          - runner: windows-2022
             target: x86_64-pc-windows-msvc
+            use_sccache: "false"
     steps:
-      - name: Checkout released source
+      - name: Checkout package source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.metadata.outputs.release-tag }}
+          ref: ${{ needs.metadata.outputs.source_ref }}
           persist-credentials: false
 
       - name: Build and smoke-test canonical package
@@ -118,7 +131,7 @@ jobs:
           package-version: ${{ needs.metadata.outputs.package-version }}
           build-mode: debug
           include-app-server: "false"
-          use-sccache: "true"
+          use-sccache: ${{ matrix.use_sccache }}
           include-symbols: "false"
           include-zstd: "false"
 

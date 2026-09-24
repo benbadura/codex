@@ -40,8 +40,7 @@ runs:
         BUILD_MODE: ${{ inputs.build-mode }}
         INCLUDE_APP_SERVER: ${{ inputs.include-app-server }}
         INCLUDE_SYMBOLS: ${{ inputs.include-symbols }}
-        # macOS symbol extraction needs packed dSYM bundles before binaries are stripped.
-        CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ inputs.include-symbols == 'true' && contains(inputs.target, 'apple-darwin') && 'packed' || 'off' }}
+        TARGET: ${{ inputs.target }}
       run: |
         set -euo pipefail
         needed_binaries="$BASE_BINARIES"
@@ -51,8 +50,17 @@ runs:
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           needed_binaries+=" $WINDOWS_ONLY_BINARIES"
         fi
+        split_debuginfo="off"
+        if [[ "$TARGET" == *-windows-msvc ]]; then
+          # Windows MSVC only supports packed split debug info. Cargo still
+          # omits PDB contents below when INCLUDE_SYMBOLS is false.
+          split_debuginfo="packed"
+        elif [[ "$INCLUDE_SYMBOLS" == "true" && "$TARGET" == *-apple-darwin ]]; then
+          # macOS symbol extraction needs packed dSYM bundles before stripping.
+          split_debuginfo="packed"
+        fi
         echo "NEEDED_BINARIES=$needed_binaries" >> "$GITHUB_ENV"
-        echo "CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=$CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO" >> "$GITHUB_ENV"
+        echo "CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=$split_debuginfo" >> "$GITHUB_ENV"
         case "$BUILD_MODE" in
           release) ;;
           debug)
@@ -245,17 +253,15 @@ runs:
         fi
         STABLE_GIT_COMMIT="$(git rev-parse HEAD)"
         export STABLE_GIT_COMMIT
-        cargo build --target "${TARGET}" --release --timings "${build_args[@]}" &
-        cargo_pid=$!
-        started_at=$SECONDS
-        while kill -0 "$cargo_pid" 2>/dev/null; do
-          sleep 30
-          if kill -0 "$cargo_pid" 2>/dev/null; then
-            elapsed=$((SECONDS - started_at))
-            echo "::notice::Cargo build for ${TARGET} is active (${elapsed}s elapsed)."
-          fi
-        done
-        wait "$cargo_pid"
+        echo "::notice title=Codex build::Compiling ${TARGET} binaries: ${NEEDED_BINARIES}"
+        set +e
+        cargo build --target "${TARGET}" --release --timings "${build_args[@]}"
+        cargo_status=$?
+        set -e
+        if [[ "$cargo_status" -ne 0 ]]; then
+          echo "::error title=Codex build failed::cargo build for ${TARGET} exited with code ${cargo_status}."
+          exit "$cargo_status"
+        fi
 
     - name: Normalize Windows PDB filenames
       if: ${{ runner.os == 'Windows' && inputs.include-symbols == 'true' }}
@@ -349,12 +355,19 @@ runs:
           archive_args+=(--archive-output "${archive_dir}/codex-package-${target}.tar.zst")
         fi
 
+        set +e
         python3 "${PACKAGE_ACTION_PATH}/../../../scripts/build_codex_package.py" \
           "${package_args[@]}" \
           --variant codex \
           --entrypoint-bin "${release_dir}/codex${exe_suffix}" \
           --package-dir "${RUNNER_TEMP}/codex-package-${target}" \
           "${archive_args[@]}"
+        package_status=$?
+        set -e
+        if [[ "$package_status" -ne 0 ]]; then
+          echo "::error title=Codex packaging failed::Package assembly for ${target} exited with code ${package_status}."
+          exit "$package_status"
+        fi
 
         if [[ "$INCLUDE_APP_SERVER" == "true" ]]; then
           app_server_archive_args=(
@@ -425,15 +438,36 @@ runs:
         archive="${GITHUB_WORKSPACE}/dist/${TARGET}/codex-package-${TARGET}.tar.gz"
         extracted="${RUNNER_TEMP}/codex-cli-smoke-${TARGET}"
         mkdir -p "${extracted}"
-        tar -xzf "${archive}" -C "${extracted}"
+        python3 - "${archive}" "${extracted}" <<'PY'
+        import sys
+        import tarfile
+
+        archive, extracted = sys.argv[1:]
+        with tarfile.open(archive, "r:gz") as bundle:
+            bundle.extractall(extracted, filter="data")
+        PY
 
         executable="${extracted}/bin/codex"
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           executable+=".exe"
         fi
-        "${executable}" --version
-        "${executable}" --help >/dev/null
-        "${executable}" features list >/dev/null
+
+        run_smoke_check() {
+          local check_name="$1"
+          shift
+          set +e
+          "$@"
+          local check_status=$?
+          set -e
+          if [[ "$check_status" -ne 0 ]]; then
+            echo "::error title=Codex smoke test failed::${check_name} exited with code ${check_status} on ${TARGET}."
+            exit "$check_status"
+          fi
+        }
+
+        run_smoke_check "codex --version" "${executable}" --version
+        run_smoke_check "codex --help" "${executable}" --help
+        run_smoke_check "codex features list" "${executable}" features list
 
     - name: Save Cargo download cache
       if: ${{ always() && !cancelled() && inputs.use-sccache == 'true' && steps.cargo-home-cache.outputs.cache-hit != 'true' }}

@@ -47,7 +47,7 @@ Zwykłe `codex` zachowuje swoją nazwę i instalację. Wrapper ustawia własny `
 
 Workflow [codex-v2-release.yml](.github/workflows/codex-v2-release.yml) uruchamia się po utworzeniu release'a. Obecnie buduje i testuje dwie paczki: macOS ARM64 (`aarch64-apple-darwin`) oraz Windows x64 (`x86_64-pc-windows-msvc`). Generuje `codex-v2_SHA256SUMS` i dopina wszystko do tego samego release'a. Użyj tagu w formacie `codex-v2-vX.Y.Z`, np. `codex-v2-v0.1.0`; tag ma wskazywać kod, który chcesz zbudować.
 
-Build korzysta z osobnego cache pobranych zależności Cargo oraz `sccache` dla każdego systemu, targetu, profilu i wersji `Cargo.lock`. Paczki tego forka powstają w szybkim profilu walidacyjnym: bez LTO, symboli debugowania i dodatkowego archiwum `.tar.zst`; zachowują kompletny układ instalacyjny, ale nie są buildem zoptymalizowanym do oficjalnej dystrybucji. Przed kompilacją osobny, pięciominutowy job sprawdza ścieżki pakowania Windows/macOS i instalator. Każdy właściwy build ma limit 60 minut oraz wypisuje heartbeat Cargo co 30 sekund. Statystyki trafień cache są widoczne w podsumowaniu joba.
+Build macOS korzysta z osobnego cache pobranych zależności Cargo oraz `sccache`; na Windows cache kompilatora jest wyłączony, aby MSVC działał bez dodatkowego wrappera. Paczki tego forka powstają w szybkim profilu walidacyjnym: bez LTO, symboli debugowania i dodatkowego archiwum `.tar.zst`; zachowują kompletny układ instalacyjny, ale nie są buildem zoptymalizowanym do oficjalnej dystrybucji. Przed kompilacją osobny, pięciominutowy job sprawdza ścieżki pakowania Windows/macOS i instalator. Każdy właściwy build ma limit 60 minut, a błędy kompilacji, pakowania i smoke testu dostają osobną adnotację w GitHub Actions. Statystyki trafień cache macOS są widoczne w podsumowaniu joba.
 
 Na tym Macu wybierz `aarch64-apple-darwin`. Pobierz z release'a archiwum `codex-v2-<wersja>-aarch64-apple-darwin.tar.gz` i plik sum, a następnie:
 
@@ -75,7 +75,7 @@ Dodaj `%USERPROFILE%\.local\bin` do zmiennej użytkownika `PATH`, otwórz nowy P
 
 Instalator kopiuje paczkę do wersjonowanego katalogu pod `.local/lib/codex-v2/releases` w katalogu użytkownika, więc po zakończeniu można usunąć pobrane archiwum i katalog po rozpakowaniu. Aktualizacja polega na pobraniu nowego release'a i ponownym uruchomieniu jego instalatora; stan w `.codex-v2` zostaje zachowany.
 
-Workflow musi znajdować się na domyślnej gałęzi przed utworzeniem release'a. Trigger `created` nie działa dla draftów. Jeśli release utworzył inny workflow za pomocą jego `GITHUB_TOKEN` albo chcesz ponowić nieudany build, uruchom ręcznie workflow **codex-v2 release packages** i podaj istniejący tag. Ręczne uruchomienie nadpisuje aktywa o tych samych nazwach.
+Workflow musi znajdować się na domyślnej gałęzi przed utworzeniem release'a. Trigger `created` nie działa dla draftów. Jeśli release utworzył inny workflow za pomocą jego `GITHUB_TOKEN` albo chcesz ponowić nieudany build, uruchom ręcznie workflow **codex-v2 release packages** i podaj istniejący tag. Domyślnie workflow ponownie buduje kod z tego tagu. Aby przetestować poprawkę z nowszego commita bez przesuwania tagu, ustaw też `source_ref`, np. na `main` albo pełny SHA commita. Ręczne uruchomienie nadpisuje aktywa o tych samych nazwach w release wskazanym przez `tag`.
 
 ### Alternatywa: lokalny build
 
