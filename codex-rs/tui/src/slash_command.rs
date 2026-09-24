@@ -51,6 +51,7 @@ pub enum SlashCommand {
     Diff,
     Mention,
     Status,
+    DetailedStatus,
     Daemon,
     Warnings,
     Cd,
@@ -115,6 +116,7 @@ impl SlashCommand {
             SlashCommand::Hooks => "view and manage lifecycle hooks",
             SlashCommand::Daemon => "Manage the local background server",
             SlashCommand::Warnings => "view retained warnings and diagnostic details",
+            SlashCommand::DetailedStatus => "show live session and subagent token usage by model",
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Cd => "change the current working directory",
             SlashCommand::Pwd => "show the current working directory",
@@ -200,6 +202,7 @@ impl SlashCommand {
                 | SlashCommand::Diff
                 | SlashCommand::Mention
                 | SlashCommand::Status
+                | SlashCommand::DetailedStatus
                 | SlashCommand::Daemon
                 | SlashCommand::Warnings
                 | SlashCommand::Pwd
@@ -226,6 +229,7 @@ impl SlashCommand {
                 | SlashCommand::Quit
                 | SlashCommand::Exit
                 | SlashCommand::Status
+                | SlashCommand::DetailedStatus
                 | SlashCommand::Warnings
                 | SlashCommand::DebugConfig
                 | SlashCommand::Pwd
@@ -272,6 +276,7 @@ impl SlashCommand {
             | SlashCommand::Skills
             | SlashCommand::Hooks
             | SlashCommand::Status
+            | SlashCommand::DetailedStatus
             | SlashCommand::Daemon
             | SlashCommand::Warnings
             | SlashCommand::Pwd

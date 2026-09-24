@@ -208,6 +208,7 @@ mod agents_overview_details;
 mod agents_overview_threads;
 mod agents_overview_usage;
 mod agents_overview_view;
+mod session_usage;
 pub(crate) use agents_overview::AGENTS_OVERVIEW_VIEW_ID;
 mod activity_groups;
 mod app_server_event_targets;
@@ -649,6 +650,7 @@ pub(crate) struct App {
     thread_event_listener_tasks: HashMap<ThreadId, JoinHandle<()>>,
     agent_navigation: AgentNavigationState,
     agents_overview: agents_overview::AgentsOverviewState,
+    session_usage: Arc<std::sync::Mutex<session_usage::SessionUsage>>,
     side_threads: HashMap<ThreadId, SideThreadState>,
     abandoned_side_threads: HashSet<ThreadId>,
     active_thread_id: Option<ThreadId>,

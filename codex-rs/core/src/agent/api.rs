@@ -163,6 +163,8 @@ impl AgentInfo {
 /// User input starts or steers a turn; agent messages retain their sender and wake mode.
 pub enum AgentInput {
     UserInput(Vec<UserInput>),
+    /// Report activity to the target UI without queuing model input or starting a turn.
+    Progress,
     Message {
         message: AgentMessage,
         mode: MessageDeliveryMode,

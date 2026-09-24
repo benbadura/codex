@@ -296,7 +296,7 @@ pub(crate) fn sub_agent_activity_display(item: &ThreadItem) -> Option<SubAgentAc
     };
     let is_running_hint = match kind {
         SubAgentActivityKind::Started => true,
-        SubAgentActivityKind::Interacted => return None,
+        SubAgentActivityKind::Interacted | SubAgentActivityKind::Progress => return None,
         SubAgentActivityKind::Interrupted | SubAgentActivityKind::Completed => false,
     };
     Some(SubAgentActivityDisplay {
@@ -322,6 +322,7 @@ pub(crate) fn sub_agent_activity_history_cell(item: &ThreadItem) -> Option<Plain
 fn sub_agent_activity_title(kind: SubAgentActivityKind, agent_path: &str) -> Line<'static> {
     let (prefix, path) = match kind {
         SubAgentActivityKind::Started => ("Started ", agent_path),
+        SubAgentActivityKind::Progress => ("Progress from ", agent_path),
         SubAgentActivityKind::Interacted => ("Interacted with ", agent_path),
         SubAgentActivityKind::Interrupted => ("Interrupted ", agent_path),
         SubAgentActivityKind::Completed => ("Completed ", agent_path),
@@ -688,6 +689,19 @@ mod tests {
         };
 
         assert_eq!(sub_agent_activity_display(&item), None);
+    }
+
+    #[test]
+    fn progress_activity_renders_without_changing_liveness() {
+        let item = ThreadItem::SubAgentActivity {
+            id: "progress-1".to_string(),
+            kind: SubAgentActivityKind::Progress,
+            agent_thread_id: ThreadId::new().to_string(),
+            agent_path: "/root/worker".to_string(),
+        };
+        assert_eq!(sub_agent_activity_display(&item), None);
+        let cell = sub_agent_activity_history_cell(&item).expect("progress cell");
+        assert_snapshot!("collab_agent_progress", cell_to_text(&cell));
     }
 
     #[test]

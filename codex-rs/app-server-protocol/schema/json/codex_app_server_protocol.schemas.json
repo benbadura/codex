@@ -20922,6 +20922,7 @@
       "SubAgentActivityKind": {
         "enum": [
           "started",
+          "progress",
           "interacted",
           "interrupted",
           "completed"

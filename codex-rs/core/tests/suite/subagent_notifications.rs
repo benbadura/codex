@@ -109,7 +109,7 @@ const FULL_HISTORY_EXPLICIT_PROMPT: &str = "restore explicit-only delegation";
 const FULL_HISTORY_PROACTIVE_POLICY: &str = "Proactive multi-agent delegation is active.";
 const FULL_HISTORY_EXPLICIT_POLICY: &str = "Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask";
 
-fn body_contains(req: &wiremock::Request, text: &str) -> bool {
+pub(super) fn body_contains(req: &wiremock::Request, text: &str) -> bool {
     decoded_body(req)
         .and_then(|body| String::from_utf8(body).ok())
         .is_some_and(|body| body.contains(text))

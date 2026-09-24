@@ -22,7 +22,7 @@ Scenario: An active agent posts a shared decision and fetches the text without a
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.
+    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 

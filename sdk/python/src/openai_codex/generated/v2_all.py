@@ -5014,6 +5014,7 @@ class StrictReviewRequiredNotification(BaseModel):
 
 class SubAgentActivityKind(Enum):
     started = "started"
+    progress = "progress"
     interacted = "interacted"
     interrupted = "interrupted"
     completed = "completed"

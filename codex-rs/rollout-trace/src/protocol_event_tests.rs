@@ -51,16 +51,20 @@ fn sub_agent_activity_is_a_terminal_tool_runtime_event() -> anyhow::Result<()> {
 }
 
 #[test]
-fn completed_sub_agent_activity_is_not_a_tool_runtime_event() -> anyhow::Result<()> {
-    let event = EventMsg::SubAgentActivity(SubAgentActivityEvent {
-        event_id: "child-turn-completed".to_string(),
-        occurred_at_ms: 1234,
-        agent_thread_id: ThreadId::new(),
-        agent_path: AgentPath::try_from("/root/reviewer").map_err(anyhow::Error::msg)?,
-        kind: SubAgentActivityKind::Completed,
-    });
-
-    assert!(tool_runtime_trace_event(&event).is_none());
+fn unsolicited_sub_agent_activity_is_not_a_tool_runtime_event() -> anyhow::Result<()> {
+    for kind in [
+        SubAgentActivityKind::Completed,
+        SubAgentActivityKind::Progress,
+    ] {
+        let event = EventMsg::SubAgentActivity(SubAgentActivityEvent {
+            event_id: "child-activity".to_string(),
+            occurred_at_ms: 1234,
+            agent_thread_id: ThreadId::new(),
+            agent_path: AgentPath::try_from("/root/reviewer").map_err(anyhow::Error::msg)?,
+            kind,
+        });
+        assert!(tool_runtime_trace_event(&event).is_none());
+    }
     Ok(())
 }
 

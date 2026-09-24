@@ -506,6 +506,10 @@ impl ChatWidget {
             }
             SlashCommand::Daemon => self.app_event_tx.send(AppEvent::OpenDaemonMenu),
             SlashCommand::Warnings => self.app_event_tx.send(AppEvent::OpenWarnings),
+            SlashCommand::DetailedStatus => {
+                self.app_event_tx
+                    .send(AppEvent::OpenSessionUsage { detailed: true });
+            }
             SlashCommand::Status => {
                 if self.should_prefetch_rate_limits() {
                     let request_id = self.next_status_refresh_request_id;
@@ -1210,6 +1214,7 @@ impl ChatWidget {
         match cmd {
             SlashCommand::Ide
             | SlashCommand::Status
+            | SlashCommand::DetailedStatus
             | SlashCommand::Daemon
             | SlashCommand::Pwd
             | SlashCommand::Usage

@@ -634,6 +634,11 @@ impl App {
         app_server: &mut AppServerSession,
         key_event: KeyEvent,
     ) -> bool {
+        if self.keymap.app.open_session_usage.is_pressed(key_event) {
+            self.app_event_tx
+                .send(AppEvent::OpenSessionUsage { detailed: false });
+            return true;
+        }
         if self.keymap.app.open_warnings.is_pressed(key_event) {
             self.chat_widget.open_warnings(&self.transcript_cells);
             return true;

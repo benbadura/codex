@@ -1,5 +1,6 @@
 use super::analytics::ToolCallAnalytics;
 use super::message_tool::FollowupTaskArgs;
+use super::message_tool::MessageKind;
 use super::message_tool::handle_message_string_tool;
 use super::*;
 use crate::agent::types::MessageDeliveryMode;
@@ -41,6 +42,7 @@ impl Handler {
         handle_message_string_tool(
             invocation,
             MessageDeliveryMode::TriggerTurn,
+            MessageKind::Message,
             args.target,
             args.message,
             analytics,

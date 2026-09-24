@@ -1,0 +1,170 @@
+name: codex-v2 release packages
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub Release tag to rebuild and update.
+        required: true
+        type: string
+
+concurrency:
+  group: codex-v2-release-${{ github.event.release.id || inputs.tag }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  metadata:
+    name: Resolve release source
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      package-version: ${{ steps.package.outputs.version }}
+      release-tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RELEASE_TAG}" ]]; then
+            echo "Release tag is empty." >&2
+            exit 1
+          fi
+          echo "tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout released source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          persist-credentials: false
+
+      - name: Read package version from tag
+        id: package
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_TAG}" =~ ^codex-v2-v(.+)$ ]]; then
+            echo "Release tag must use the format codex-v2-vX.Y.Z." >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          CODEX_REPO_ROOT="${GITHUB_WORKSPACE}" PYTHONPATH=scripts \
+            python3 - "${version}" <<'PY'
+          import sys
+          from codex_package.cli import parse_package_version
+
+          parse_package_version(sys.argv[1])
+          PY
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    steps:
+      - name: Checkout released source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.release-tag }}
+          persist-credentials: false
+
+      - name: Build and smoke-test canonical package
+        uses: ./.github/actions/build-codex-packages
+        with:
+          target: ${{ matrix.target }}
+          package-version: ${{ needs.metadata.outputs.package-version }}
+          build-mode: release
+          include-app-server: "false"
+
+      - name: Add codex-v2 installer
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ needs.metadata.outputs.package-version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          source_archive="dist/${TARGET}/codex-package-${TARGET}.tar.gz"
+          package_dir="${RUNNER_TEMP}/codex-v2"
+          asset_dir="${GITHUB_WORKSPACE}/codex-v2-release-assets"
+          asset="${asset_dir}/codex-v2-${PACKAGE_VERSION}-${TARGET}.tar.gz"
+
+          mkdir -p "${package_dir}" "${asset_dir}"
+          tar -xzf "${source_archive}" -C "${package_dir}"
+          cp scripts/install_codex_v2.py "${package_dir}/install-codex-v2.py"
+          cp scripts/codex_v2_release_README.md "${package_dir}/README.md"
+          tar -czf "${asset}" -C "${RUNNER_TEMP}" codex-v2
+
+          python3 - "${asset}" "${TARGET}" <<'PY'
+          import sys
+          import tarfile
+
+          archive, target = sys.argv[1:]
+          required = {
+              "codex-v2/bin/codex",
+              "codex-v2/bin/codex-code-mode-host",
+              "codex-v2/codex-package.json",
+              "codex-v2/install-codex-v2.py",
+              "codex-v2/README.md",
+          }
+          with tarfile.open(archive, "r:gz") as bundle:
+              names = set(bundle.getnames())
+          missing = required - names
+          if missing:
+              raise SystemExit(f"{target}: release bundle is missing {sorted(missing)}")
+          PY
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codex-v2-${{ matrix.target }}
+          path: codex-v2-release-assets/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Attach packages to GitHub Release
+    needs: [metadata, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release candidates
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: codex-v2-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksum manifest
+        working-directory: release-assets
+        run: sha256sum codex-v2-*.tar.gz > codex-v2_SHA256SUMS
+
+      - name: Attach assets to release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ needs.metadata.outputs.release-tag }}
+          files: release-assets/**
+          overwrite_files: true
+          preserve_order: true

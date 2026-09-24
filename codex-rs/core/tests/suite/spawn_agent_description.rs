@@ -369,7 +369,7 @@ async fn multi_agent_v2_wait_guidance_uses_overridable_developer_instructions(
     let developer_messages = request.message_input_texts("developer");
     let has_wait_guidance = developer_messages.iter().any(|message| {
         message.contains(
-            "When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.",
+            "When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: \"until_event\"` and omit `timeout_ms`. It waits for actionable input without periodic model calls and remains interruptible by the user. Do not routinely poll with `list_agents`; use it for deliberate inspection or diagnosis. Use `send_message` with `kind: \"progress\"` for UI-only progress reports, and the default message kind for questions, blockers, or other information requiring action. Progress text is not delivered to the recipient model.",
         )
     });
     assert_eq!(has_wait_guidance, expected_wait_guidance);
@@ -401,8 +401,7 @@ async fn multi_agent_v2_cold_resume_refreshes_legacy_usage_hints_once(
 ) -> Result<()> {
     let resumed_root_agent_usage_hint_text = resumed_root_agent_usage_hint_text.map(str::to_string);
     let legacy_root_agent_usage_hint_text = "Legacy root instructions.";
-    let wait_guidance =
-        "When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.";
+    let wait_guidance = "When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: \"until_event\"` and omit `timeout_ms`. It waits for actionable input without periodic model calls and remains interruptible by the user. Do not routinely poll with `list_agents`; use it for deliberate inspection or diagnosis. Use `send_message` with `kind: \"progress\"` for UI-only progress reports, and the default message kind for questions, blockers, or other information requiring action. Progress text is not delivered to the recipient model.";
     let config_toml = format!(
         "[features.multi_agent_v2]\nenabled = true\nwait_agent_enabled = {wait_agent_enabled}\n"
     );
@@ -575,8 +574,7 @@ async fn multi_agent_v2_resume_refreshes_changed_wait_guidance(
     initial_wait_agent_enabled: bool,
     resumed_wait_agent_enabled: bool,
 ) -> Result<()> {
-    let wait_guidance =
-        "When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.";
+    let wait_guidance = "When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: \"until_event\"` and omit `timeout_ms`. It waits for actionable input without periodic model calls and remains interruptible by the user. Do not routinely poll with `list_agents`; use it for deliberate inspection or diagnosis. Use `send_message` with `kind: \"progress\"` for UI-only progress reports, and the default message kind for questions, blockers, or other information requiring action. Progress text is not delivered to the recipient model.";
     let initial_config_toml = format!(
         "[features.multi_agent_v2]\nenabled = true\nwait_agent_enabled = {initial_wait_agent_enabled}\n"
     );
@@ -754,7 +752,7 @@ wait_agent_enabled = {wait_agent_enabled}
             .iter()
             .any(|message| {
                 message.contains(
-                "When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.",
+                "When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: \"until_event\"` and omit `timeout_ms`. It waits for actionable input without periodic model calls and remains interruptible by the user. Do not routinely poll with `list_agents`; use it for deliberate inspection or diagnosis. Use `send_message` with `kind: \"progress\"` for UI-only progress reports, and the default message kind for questions, blockers, or other information requiring action. Progress text is not delivered to the recipient model.",
             )
             }),
         wait_agent_enabled

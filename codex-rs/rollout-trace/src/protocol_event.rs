@@ -353,7 +353,12 @@ pub(crate) fn tool_runtime_trace_event(event: &EventMsg) -> Option<ToolRuntimeTr
             status: ExecutionStatus::Completed,
             payload: ToolRuntimePayload::CollabCloseEnd(event),
         }),
-        EventMsg::SubAgentActivity(event) if event.kind != SubAgentActivityKind::Completed => {
+        EventMsg::SubAgentActivity(event)
+            if !matches!(
+                event.kind,
+                SubAgentActivityKind::Completed | SubAgentActivityKind::Progress
+            ) =>
+        {
             Some(ToolRuntimeTraceEvent::Ended {
                 tool_call_id: &event.event_id,
                 status: ExecutionStatus::Completed,

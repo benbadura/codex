@@ -4384,6 +4384,7 @@ pub struct CollabAgentInteractionEndEvent {
 #[ts(rename_all = "snake_case")]
 pub enum SubAgentActivityKind {
     Started,
+    Progress,
     Interacted,
     Interrupted,
     Completed,

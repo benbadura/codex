@@ -103,6 +103,8 @@ pub(crate) struct AppKeymap {
     pub(crate) focus_activity: Vec<KeyBinding>,
     /// Open retained warnings without replacing the composer.
     pub(crate) open_warnings: Vec<KeyBinding>,
+    /// Open live usage for the current session tree.
+    pub(crate) open_session_usage: Vec<KeyBinding>,
     /// Open external editor for the current draft.
     pub(crate) open_external_editor: Vec<KeyBinding>,
     /// Copy the last agent response to the clipboard.
@@ -701,6 +703,18 @@ impl RuntimeKeymap {
                 "tui.keymap.global.focus_activity",
             )?,
             open_warnings: open_warnings_defaults,
+            open_session_usage: defaults
+                .app
+                .open_session_usage
+                .iter()
+                .copied()
+                .filter(|binding| {
+                    !configured_context_binding_is_used(keymap, *binding)
+                        && !chords.bindings.iter().any(|chord| {
+                            chord.chord.prefix.normalized_parts() == binding.normalized_parts()
+                        })
+                })
+                .collect(),
             open_external_editor: resolve_bindings(
                 keymap.global.open_external_editor.as_ref(),
                 &defaults.app.open_external_editor,
@@ -1648,6 +1662,7 @@ impl RuntimeKeymap {
                 find_transcript: default_bindings![plain(KeyCode::F(3))],
                 focus_activity: default_bindings![plain(KeyCode::F(4))],
                 open_warnings: default_bindings![plain(KeyCode::F(2))],
+                open_session_usage: default_bindings![plain(KeyCode::F(5))],
                 open_external_editor: default_bindings![ctrl(KeyCode::Char('g'))],
                 copy: default_bindings![ctrl(KeyCode::Char('o'))],
                 clear_terminal: default_bindings![ctrl(KeyCode::Char('l'))],
@@ -2008,6 +2023,7 @@ impl RuntimeKeymap {
             ("find_transcript", self.app.find_transcript.as_slice()),
             ("focus_activity", self.app.focus_activity.as_slice()),
             ("open_warnings", self.app.open_warnings.as_slice()),
+            ("open_session_usage", self.app.open_session_usage.as_slice()),
             (
                 "open_external_editor",
                 self.app.open_external_editor.as_slice(),
@@ -2114,6 +2130,7 @@ impl RuntimeKeymap {
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("focus_activity", self.app.focus_activity.as_slice()),
                 ("open_warnings", self.app.open_warnings.as_slice()),
+                ("open_session_usage", self.app.open_session_usage.as_slice()),
                 (
                     "open_external_editor",
                     self.app.open_external_editor.as_slice(),
@@ -2173,6 +2190,7 @@ impl RuntimeKeymap {
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("focus_activity", self.app.focus_activity.as_slice()),
                 ("open_warnings", self.app.open_warnings.as_slice()),
+                ("open_session_usage", self.app.open_session_usage.as_slice()),
                 (
                     "open_external_editor",
                     self.app.open_external_editor.as_slice(),

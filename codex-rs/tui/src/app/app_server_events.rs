@@ -67,6 +67,10 @@ impl App {
     ) {
         match event {
             AppServerEvent::Lagged { skipped } => {
+                self.session_usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .incomplete = true;
                 tracing::warn!(
                     skipped,
                     "app-server event consumer lagged; dropping ignored events"
@@ -104,6 +108,10 @@ impl App {
                 self.repaint_agents_overview();
             }
             AppServerEvent::Disconnected { message } => {
+                self.session_usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .incomplete = true;
                 if self.begin_reconnect() {
                     return;
                 }
@@ -219,6 +227,7 @@ impl App {
                 .entry(thread_id)
                 .or_default();
         }
+        self.track_session_usage(&notification, app_server_client);
         self.track_agents_overview_notification(&notification);
         if matches!(
             &notification,

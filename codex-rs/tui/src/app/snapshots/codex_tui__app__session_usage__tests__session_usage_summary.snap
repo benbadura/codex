@@ -1,0 +1,22 @@
+---
+source: tui/src/app/session_usage_tests.rs
+expression: text
+---
+Session usage · live
+Root: root
+Tokens, not a bill. Monetary cost unavailable without verified pricing.
+Observed threads only; updates arrive after model responses, not per token.
+
+Parent     1100 total · 1000 input · 800 cached · 100 output
+Subagents  675 total · 600 input · 300 cached · 75 output
+Total      1775 total · 1600 input · 1100 cached · 175 output
+
+Usage by model
+Parent · astra
+  1100 total · 1000 input · 800 cached · 100 output
+Subagents · luna
+  675 total · 600 input · 300 cached · 75 output
+
+Close and run /detailed-status for per-agent models, tokens and active time.
+Input includes cached input; total = input + output. Cache and reasoning are not added twice.
+Unknown = history/model attribution unavailable. Closed agents are retained until this TUI exits.

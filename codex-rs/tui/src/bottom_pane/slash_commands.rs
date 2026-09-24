@@ -332,6 +332,7 @@ mod tests {
                 SlashCommand::Diff,
                 SlashCommand::Mention,
                 SlashCommand::Status,
+                SlashCommand::DetailedStatus,
                 SlashCommand::Daemon,
                 SlashCommand::Warnings,
                 SlashCommand::Pwd,

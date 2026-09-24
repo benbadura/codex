@@ -41,6 +41,7 @@ impl Handler {
         handle_message_string_tool(
             invocation,
             MessageDeliveryMode::QueueOnly,
+            args.kind,
             args.target,
             args.message,
             analytics,

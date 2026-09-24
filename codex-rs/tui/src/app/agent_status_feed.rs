@@ -180,6 +180,7 @@ fn activity_summary(item: &ThreadItem) -> Option<String> {
         } => {
             let action = match kind {
                 SubAgentActivityKind::Started => "Started",
+                SubAgentActivityKind::Progress => "Progress",
                 SubAgentActivityKind::Interacted => "Contacted",
                 SubAgentActivityKind::Interrupted => "Interrupted",
                 SubAgentActivityKind::Completed => "Completed",

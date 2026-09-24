@@ -185,6 +185,13 @@ pub fn create_send_input_tool_v1() -> ToolSpec {
 pub fn create_send_message_tool() -> ToolSpec {
     let properties = BTreeMap::from([
         (
+            "kind".to_string(),
+            JsonSchema::string_enum(
+                vec!["message".into(), "progress".into()],
+                Some("Defaults to message: deliver information requiring action, including questions and blockers. Use progress for UI-only activity that never wakes or adds input to the recipient model; its text stays in your own history.".to_string()),
+            ),
+        ),
+        (
             "target".to_string(),
             JsonSchema::string(Some(
                 "Relative or canonical task name to message (from spawn_agent).".to_string(),
@@ -284,7 +291,7 @@ pub fn create_wait_agent_tool_v1(options: WaitAgentTimeoutOptions) -> ToolSpec {
 pub fn create_wait_agent_tool_v2(options: WaitAgentTimeoutOptions) -> ToolSpec {
     ToolSpec::Function(ResponsesApiTool {
         name: "wait_agent".to_string(),
-        description: "Wait for a mailbox update from any live agent, including queued messages and final-status notifications. The wait also ends early when new user input is steered into the active turn. Does not return the content; returns either a summary of which agents have updates (if any), an interruption summary for steered input, or a timeout summary if no activity arrives before the deadline."
+        description: "Wait for a mailbox update from any live agent, including queued messages and final-status notifications. The wait also ends early when new user input is steered into the active turn. Does not return the content; returns either a summary of which agents have updates (if any), an interruption summary for steered input, or a timeout summary if no activity arrives before the deadline. Use mode=until_event to wait without timeout-driven model calls; returns no_active_agents when no other agents are active and no input is pending."
             .to_string(),
         strict: false,
         defer_loading: None,
@@ -875,13 +882,22 @@ fn wait_agent_tool_parameters_v1(options: WaitAgentTimeoutOptions) -> JsonSchema
 }
 
 fn wait_agent_tool_parameters_v2(options: WaitAgentTimeoutOptions) -> JsonSchema {
-    let properties = BTreeMap::from([(
-        "timeout_ms".to_string(),
-        JsonSchema::number(Some(format!(
-            "Timeout in milliseconds. Defaults to {}, min {}, max {}.",
-            options.default_timeout_ms, options.min_timeout_ms, options.max_timeout_ms,
-        ))),
-    )]);
+    let properties = BTreeMap::from([
+        (
+            "mode".to_string(),
+            JsonSchema::string_enum(
+                vec!["timeout".into(), "until_event".into()],
+                Some("Defaults to timeout. Prefer until_event when waiting for agents: no periodic timeout or polling; returns for actionable mail, completion, failure, or user input. Do not combine until_event with timeout_ms.".to_string()),
+            ),
+        ),
+        (
+            "timeout_ms".to_string(),
+            JsonSchema::number(Some(format!(
+                "Timeout in milliseconds. Defaults to {}, min {}, max {}.",
+                options.default_timeout_ms, options.min_timeout_ms, options.max_timeout_ms,
+            ))),
+        ),
+    ]);
 
     JsonSchema::object(properties, /*required*/ None, Some(false.into()))
 }

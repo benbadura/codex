@@ -1254,6 +1254,7 @@ impl From<CoreCollabAgentToolCallStatus> for CollabAgentToolCallStatus {
 #[ts(export_to = "v2/")]
 pub enum SubAgentActivityKind {
     Started,
+    Progress,
     Interacted,
     Interrupted,
     Completed,
@@ -1263,6 +1264,7 @@ impl From<CoreSubAgentActivityKind> for SubAgentActivityKind {
     fn from(value: CoreSubAgentActivityKind) -> Self {
         match value {
             CoreSubAgentActivityKind::Started => SubAgentActivityKind::Started,
+            CoreSubAgentActivityKind::Progress => SubAgentActivityKind::Progress,
             CoreSubAgentActivityKind::Interacted => SubAgentActivityKind::Interacted,
             CoreSubAgentActivityKind::Interrupted => SubAgentActivityKind::Interrupted,
             CoreSubAgentActivityKind::Completed => SubAgentActivityKind::Completed,

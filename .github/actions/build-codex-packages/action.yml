@@ -1,5 +1,5 @@
 name: build-codex-packages
-description: Build and smoke-test unsigned Codex CLI and app-server release packages.
+description: Build and smoke-test unsigned Codex release packages.
 inputs:
   target:
     description: Rust release target triple to build and test.
@@ -10,6 +10,10 @@ inputs:
   build-mode:
     description: Use release optimizations (release) or disable them for faster smoke coverage (debug).
     required: true
+  include-app-server:
+    description: Build and run the full smoke suite for the app-server package too.
+    required: false
+    default: "true"
 
 # Resolve package sources relative to the action so it works in both repository layouts.
 runs:
@@ -19,14 +23,18 @@ runs:
       shell: bash
       working-directory: codex-rs
       env:
-        BASE_BINARIES: "codex codex-app-server codex-code-mode-host"
+        BASE_BINARIES: "codex codex-code-mode-host"
         WINDOWS_ONLY_BINARIES: "codex-command-runner codex-windows-sandbox-setup"
         BUILD_MODE: ${{ inputs.build-mode }}
+        INCLUDE_APP_SERVER: ${{ inputs.include-app-server }}
         # macOS symbol extraction needs packed dSYM bundles before binaries are stripped.
         CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(inputs.target, 'apple-darwin') && 'packed' || 'off' }}
       run: |
         set -euo pipefail
         needed_binaries="$BASE_BINARIES"
+        if [[ "$INCLUDE_APP_SERVER" == "true" ]]; then
+          needed_binaries+=" codex-app-server"
+        fi
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           needed_binaries+=" $WINDOWS_ONLY_BINARIES"
         fi
@@ -215,6 +223,7 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
         CODEX_PACKAGE_VERSION: ${{ inputs.package-version }}
+        INCLUDE_APP_SERVER: ${{ inputs.include-app-server }}
         PACKAGE_ACTION_PATH: ${{ github.action_path }}
       run: |
         set -euo pipefail
@@ -253,15 +262,18 @@ runs:
           --archive-output "${archive_dir}/codex-package-${target}.tar.gz" \
           --archive-output "${archive_dir}/codex-package-${target}.tar.zst"
 
-        python3 "${PACKAGE_ACTION_PATH}/../../../scripts/build_codex_package.py" \
-          "${package_args[@]}" \
-          --variant codex-app-server \
-          --entrypoint-bin "${release_dir}/codex-app-server${exe_suffix}" \
-          --package-dir "${RUNNER_TEMP}/codex-app-server-package-${target}" \
-          --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.gz" \
-          --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.zst"
+        if [[ "$INCLUDE_APP_SERVER" == "true" ]]; then
+          python3 "${PACKAGE_ACTION_PATH}/../../../scripts/build_codex_package.py" \
+            "${package_args[@]}" \
+            --variant codex-app-server \
+            --entrypoint-bin "${release_dir}/codex-app-server${exe_suffix}" \
+            --package-dir "${RUNNER_TEMP}/codex-app-server-package-${target}" \
+            --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.gz" \
+            --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.zst"
+        fi
 
     - name: Smoke-test assembled packages
+      if: ${{ inputs.include-app-server == 'true' }}
       shell: bash
       working-directory: codex-rs
       env:
@@ -298,3 +310,23 @@ runs:
           --cli-archive "${archive_dir}/codex-package-${target}.tar.zst" \
           --app-server-archive "${archive_dir}/codex-app-server-package-${target}.tar.zst" \
           test_codex_package.py
+
+    - name: Smoke-test CLI package
+      if: ${{ inputs.include-app-server != 'true' }}
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        archive="${GITHUB_WORKSPACE}/dist/${TARGET}/codex-package-${TARGET}.tar.gz"
+        extracted="${RUNNER_TEMP}/codex-cli-smoke-${TARGET}"
+        mkdir -p "${extracted}"
+        tar -xzf "${archive}" -C "${extracted}"
+
+        executable="${extracted}/bin/codex"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          executable+=".exe"
+        fi
+        "${executable}" --version
+        "${executable}" --help >/dev/null
+        "${executable}" features list >/dev/null

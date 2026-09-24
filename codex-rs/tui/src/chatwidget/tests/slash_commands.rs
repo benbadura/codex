@@ -4,6 +4,17 @@ use crate::bottom_pane::slash_commands::ServiceTierCommand;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
+#[tokio::test]
+async fn detailed_status_opens_local_view_without_model_request() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("gpt-5.4")).await;
+    chat.dispatch_command(SlashCommand::DetailedStatus);
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::OpenSessionUsage { detailed: true })
+    );
+    assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
 fn force_pet_image_support(chat: &mut ChatWidget) {
     chat.set_pet_image_support_for_tests(crate::pets::PetImageSupport::Supported(
         crate::pets::ImageProtocol::Kitty,

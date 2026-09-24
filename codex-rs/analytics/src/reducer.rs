@@ -494,7 +494,7 @@ impl TurnToolCounts {
             ThreadItem::McpToolCall { .. } => self.mcp_tool_call += 1,
             ThreadItem::DynamicToolCall { .. } => self.dynamic_tool_call += 1,
             ThreadItem::SubAgentActivity {
-                kind: SubAgentActivityKind::Completed,
+                kind: SubAgentActivityKind::Completed | SubAgentActivityKind::Progress,
                 ..
             } => return,
             ThreadItem::CollabAgentToolCall { id, .. }

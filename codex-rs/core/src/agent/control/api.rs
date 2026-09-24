@@ -25,8 +25,10 @@ use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
 use codex_protocol::error::CodexErr;
 use codex_protocol::error::Result;
+use codex_protocol::items::SubAgentActivityItem;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::SessionSource;
+use codex_protocol::protocol::SubAgentActivityKind;
 use codex_protocol::protocol::TokenUsage;
 use codex_rollout_trace::ThreadTraceContext;
 use futures::future::BoxFuture;
@@ -49,6 +51,11 @@ impl AgentControl for LocalAgentControl {
                 options,
             } = request;
             let input = match input {
+                AgentInput::Progress => {
+                    return Err(CodexErr::InvalidRequest(
+                        "progress cannot start an agent".to_string(),
+                    ));
+                }
                 AgentInput::UserInput(input) => SpawnInitialInput::UserInput(input),
                 AgentInput::Message { message, mode } => {
                     if mode != MessageDeliveryMode::TriggerTurn {
@@ -89,6 +96,40 @@ impl AgentControl for LocalAgentControl {
             } = request;
             let target = self.resolve_target(caller, &target)?;
             let (metadata, submission_id) = match input {
+                AgentInput::Progress => {
+                    let receiver = self.runtime.ensure_agent_known(target)?;
+                    let sender = self.runtime.ensure_agent_known(caller)?;
+                    let agent_path = sender.agent_path.ok_or_else(|| {
+                        CodexErr::InvalidRequest("sender is missing an agent_path".to_string())
+                    })?;
+                    let state = self.runtime.upgrade()?;
+                    let thread = state.get_thread(target).await?;
+                    let submission_id = uuid::Uuid::new_v4().to_string();
+                    // An idle recipient has no active UI turn to report against. Do not
+                    // start or resume one solely to display progress.
+                    let turn_id = thread
+                        .session
+                        .active_turn
+                        .lock()
+                        .await
+                        .as_ref()
+                        .and_then(|turn| turn.task.as_ref())
+                        .map(|task| task.turn_context.sub_id.clone());
+                    if let Some(turn_id) = turn_id {
+                        self.emit_sub_agent_activity(
+                            target,
+                            turn_id,
+                            SubAgentActivityItem {
+                                id: submission_id.clone(),
+                                agent_thread_id: caller,
+                                agent_path,
+                                kind: SubAgentActivityKind::Progress,
+                            },
+                        )
+                        .await?;
+                    }
+                    (receiver, submission_id)
+                }
                 AgentInput::UserInput(input) => {
                     let receiver = self.get_agent_metadata(target);
                     if receiver.is_some() {
