@@ -64,11 +64,36 @@ jobs:
           PY
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
+  preflight:
+    name: Validate packaging before compilation
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout released source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.release-tag }}
+          persist-credentials: false
+
+      - name: Test package and installer paths
+        env:
+          CODEX_REPO_ROOT: ${{ github.workspace }}
+          PYTHONPATH: scripts
+        run: |
+          python3 -m unittest \
+            scripts.codex_package.test_archive \
+            scripts.codex_package.test_cargo \
+            scripts.codex_package.test_layout \
+            scripts.test_install_codex_v2
+
   build:
     name: Build ${{ matrix.target }}
-    needs: metadata
+    needs: [metadata, preflight]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -91,9 +116,20 @@ jobs:
         with:
           target: ${{ matrix.target }}
           package-version: ${{ needs.metadata.outputs.package-version }}
-          build-mode: release
+          build-mode: debug
           include-app-server: "false"
           use-sccache: "true"
+          include-symbols: "false"
+          include-zstd: "false"
+
+      - name: Upload Cargo timings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codex-v2-cargo-timings-${{ matrix.target }}
+          path: ${{ env.CARGO_TARGET_DIR }}/**/cargo-timings/cargo-timing.html
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Add codex-v2 installer
         shell: bash

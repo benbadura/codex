@@ -1,5 +1,10 @@
 name: setup-ci
 description: Prepare common tools and environment shared by CI jobs.
+inputs:
+  install-just:
+    description: Install just for workflows that invoke repository recipes.
+    required: false
+    default: "true"
 outputs:
   bazel-output-base:
     description: Filesystem path used for Bazel's output base.
@@ -86,6 +91,7 @@ runs:
         CURL_HOME: ${{ runner.temp }}/dotslash-curl
 
     - name: Install just
+      if: ${{ inputs.install-just == 'true' }}
       uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
       with:
         tool: just@1.51.0

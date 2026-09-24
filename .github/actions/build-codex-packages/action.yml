@@ -18,6 +18,14 @@ inputs:
     description: Cache Cargo downloads and Rust compiler outputs between workflow runs.
     required: false
     default: "false"
+  include-symbols:
+    description: Archive debug symbols and strip the packaged binaries.
+    required: false
+    default: "true"
+  include-zstd:
+    description: Build the additional tar.zst package archives and smoke-test them.
+    required: false
+    default: "true"
 
 # Resolve package sources relative to the action so it works in both repository layouts.
 runs:
@@ -31,8 +39,9 @@ runs:
         WINDOWS_ONLY_BINARIES: "codex-command-runner codex-windows-sandbox-setup"
         BUILD_MODE: ${{ inputs.build-mode }}
         INCLUDE_APP_SERVER: ${{ inputs.include-app-server }}
+        INCLUDE_SYMBOLS: ${{ inputs.include-symbols }}
         # macOS symbol extraction needs packed dSYM bundles before binaries are stripped.
-        CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(inputs.target, 'apple-darwin') && 'packed' || 'off' }}
+        CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ inputs.include-symbols == 'true' && contains(inputs.target, 'apple-darwin') && 'packed' || 'off' }}
       run: |
         set -euo pipefail
         needed_binaries="$BASE_BINARIES"
@@ -47,18 +56,26 @@ runs:
         case "$BUILD_MODE" in
           release) ;;
           debug)
-            # Use the release profile so assertions, symbols and packaging match production.
-            # Only trade compiler optimizations for faster builds.
+            # Keep the release output layout, but remove expensive optimization
+            # and debug data for feature-validation packages.
             {
               echo "CARGO_PROFILE_RELEASE_OPT_LEVEL=0"
               echo "CARGO_PROFILE_RELEASE_LTO=off"
               echo "CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256"
             } >> "$GITHUB_ENV"
+            if [[ "$INCLUDE_SYMBOLS" != "true" ]]; then
+              {
+                echo "CARGO_PROFILE_RELEASE_DEBUG=none"
+                echo "CARGO_PROFILE_RELEASE_STRIP=symbols"
+              } >> "$GITHUB_ENV"
+            fi
             ;;
           *) echo "Unsupported build mode: $BUILD_MODE" >&2; exit 1 ;;
         esac
 
     - uses: ./.github/actions/setup-ci
+      with:
+        install-just: "false"
 
     - name: Set up Python 3.12
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -125,8 +142,7 @@ runs:
       if: ${{ inputs.use-sccache == 'true' }}
       uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
       with:
-        tool: sccache
-        version: 0.7.5
+        tool: sccache@0.7.5
 
     - name: Configure sccache
       if: ${{ inputs.use-sccache == 'true' }}
@@ -229,10 +245,20 @@ runs:
         fi
         STABLE_GIT_COMMIT="$(git rev-parse HEAD)"
         export STABLE_GIT_COMMIT
-        cargo build --target "${TARGET}" --release --timings "${build_args[@]}"
+        cargo build --target "${TARGET}" --release --timings "${build_args[@]}" &
+        cargo_pid=$!
+        started_at=$SECONDS
+        while kill -0 "$cargo_pid" 2>/dev/null; do
+          sleep 30
+          if kill -0 "$cargo_pid" 2>/dev/null; then
+            elapsed=$((SECONDS - started_at))
+            echo "::notice::Cargo build for ${TARGET} is active (${elapsed}s elapsed)."
+          fi
+        done
+        wait "$cargo_pid"
 
     - name: Normalize Windows PDB filenames
-      if: ${{ runner.os == 'Windows' }}
+      if: ${{ runner.os == 'Windows' && inputs.include-symbols == 'true' }}
       shell: bash
       working-directory: codex-rs
       env:
@@ -265,6 +291,7 @@ runs:
           -o "${RUNNER_TEMP}/codex-zsh"
 
     - name: Archive symbols and strip binaries
+      if: ${{ inputs.include-symbols == 'true' }}
       shell: bash
       working-directory: codex-rs
       env:
@@ -286,6 +313,7 @@ runs:
         TARGET: ${{ inputs.target }}
         CODEX_PACKAGE_VERSION: ${{ inputs.package-version }}
         INCLUDE_APP_SERVER: ${{ inputs.include-app-server }}
+        INCLUDE_ZSTD: ${{ inputs.include-zstd }}
         PACKAGE_ACTION_PATH: ${{ github.action_path }}
       run: |
         set -euo pipefail
@@ -316,22 +344,33 @@ runs:
           package_args+=(--zsh-manifest "${RUNNER_TEMP}/codex-zsh")
         fi
 
+        archive_args=(--archive-output "${archive_dir}/codex-package-${target}.tar.gz")
+        if [[ "$INCLUDE_ZSTD" == "true" ]]; then
+          archive_args+=(--archive-output "${archive_dir}/codex-package-${target}.tar.zst")
+        fi
+
         python3 "${PACKAGE_ACTION_PATH}/../../../scripts/build_codex_package.py" \
           "${package_args[@]}" \
           --variant codex \
           --entrypoint-bin "${release_dir}/codex${exe_suffix}" \
           --package-dir "${RUNNER_TEMP}/codex-package-${target}" \
-          --archive-output "${archive_dir}/codex-package-${target}.tar.gz" \
-          --archive-output "${archive_dir}/codex-package-${target}.tar.zst"
+          "${archive_args[@]}"
 
         if [[ "$INCLUDE_APP_SERVER" == "true" ]]; then
+          app_server_archive_args=(
+            --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.gz"
+          )
+          if [[ "$INCLUDE_ZSTD" == "true" ]]; then
+            app_server_archive_args+=(
+              --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.zst"
+            )
+          fi
           python3 "${PACKAGE_ACTION_PATH}/../../../scripts/build_codex_package.py" \
             "${package_args[@]}" \
             --variant codex-app-server \
             --entrypoint-bin "${release_dir}/codex-app-server${exe_suffix}" \
             --package-dir "${RUNNER_TEMP}/codex-app-server-package-${target}" \
-            --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.gz" \
-            --archive-output "${archive_dir}/codex-app-server-package-${target}.tar.zst"
+            "${app_server_archive_args[@]}"
         fi
 
     - name: Smoke-test assembled packages
@@ -340,6 +379,7 @@ runs:
       working-directory: codex-rs
       env:
         TARGET: ${{ inputs.target }}
+        INCLUDE_ZSTD: ${{ inputs.include-zstd }}
         PYTHONPATH: ${{ github.workspace }}/sdk/python/src${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/sdk/python/tests
         PACKAGE_ACTION_PATH: ${{ github.action_path }}
       run: |
@@ -367,11 +407,13 @@ runs:
           --app-server-archive "${archive_dir}/codex-app-server-package-${target}.tar.gz" \
           test_codex_package.py
 
-        uv run --frozen pytest "${pytest_args[@]}" \
-          --compression zstd \
-          --cli-archive "${archive_dir}/codex-package-${target}.tar.zst" \
-          --app-server-archive "${archive_dir}/codex-app-server-package-${target}.tar.zst" \
-          test_codex_package.py
+        if [[ "$INCLUDE_ZSTD" == "true" ]]; then
+          uv run --frozen pytest "${pytest_args[@]}" \
+            --compression zstd \
+            --cli-archive "${archive_dir}/codex-package-${target}.tar.zst" \
+            --app-server-archive "${archive_dir}/codex-app-server-package-${target}.tar.zst" \
+            test_codex_package.py
+        fi
 
     - name: Smoke-test CLI package
       if: ${{ inputs.include-app-server != 'true' }}

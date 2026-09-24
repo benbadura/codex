@@ -47,7 +47,7 @@ Zwykłe `codex` zachowuje swoją nazwę i instalację. Wrapper ustawia własny `
 
 Workflow [codex-v2-release.yml](.github/workflows/codex-v2-release.yml) uruchamia się po utworzeniu release'a. Obecnie buduje i testuje dwie paczki: macOS ARM64 (`aarch64-apple-darwin`) oraz Windows x64 (`x86_64-pc-windows-msvc`). Generuje `codex-v2_SHA256SUMS` i dopina wszystko do tego samego release'a. Użyj tagu w formacie `codex-v2-vX.Y.Z`, np. `codex-v2-v0.1.0`; tag ma wskazywać kod, który chcesz zbudować.
 
-Build korzysta z osobnego cache pobranych zależności Cargo oraz `sccache` dla każdego systemu, targetu, profilu i wersji `Cargo.lock`. Pierwsze uruchomienie dla danego zestawu nadal kompiluje cały projekt. Ponowienie tego samego release'a oraz zgodne wpisy cache dostępne z gałęzi domyślnej skracają kolejne kompilacje. Statystyki trafień są widoczne w podsumowaniu każdego joba.
+Build korzysta z osobnego cache pobranych zależności Cargo oraz `sccache` dla każdego systemu, targetu, profilu i wersji `Cargo.lock`. Paczki tego forka powstają w szybkim profilu walidacyjnym: bez LTO, symboli debugowania i dodatkowego archiwum `.tar.zst`; zachowują kompletny układ instalacyjny, ale nie są buildem zoptymalizowanym do oficjalnej dystrybucji. Przed kompilacją osobny, pięciominutowy job sprawdza ścieżki pakowania Windows/macOS i instalator. Każdy właściwy build ma limit 60 minut oraz wypisuje heartbeat Cargo co 30 sekund. Statystyki trafień cache są widoczne w podsumowaniu joba.
 
 Na tym Macu wybierz `aarch64-apple-darwin`. Pobierz z release'a archiwum `codex-v2-<wersja>-aarch64-apple-darwin.tar.gz` i plik sum, a następnie:
 
