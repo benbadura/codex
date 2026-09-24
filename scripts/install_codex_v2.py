@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install a locally assembled codex-v2 package on macOS/Linux."""
+"""Install a locally assembled codex-v2 package on macOS or Windows."""
 
 import argparse
 import hashlib
@@ -18,7 +18,11 @@ import tempfile
 SAFE_BUILD_PART = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
-def validate_package(package: Path) -> tuple[Path, str]:
+def is_windows_target(target: str) -> bool:
+    return "windows" in target
+
+
+def validate_package(package: Path) -> tuple[Path, str, str]:
     package = package.resolve()
     metadata_path = package / "codex-package.json"
     try:
@@ -35,16 +39,21 @@ def validate_package(package: Path) -> tuple[Path, str]:
         if not isinstance(value, str) or not SAFE_BUILD_PART.fullmatch(value):
             raise ValueError(f"Nieprawidłowe pole {key!r} w {metadata_path}.")
         identity.append(value)
+    target = identity[1]
+    suffix = ".exe" if is_windows_target(target) else ""
     for binary in ("codex", "codex-code-mode-host"):
+        binary += suffix
         path = package / "bin" / binary
-        if not path.is_file() or not os.access(path, os.X_OK):
+        if not path.is_file() or (
+            not is_windows_target(target) and not os.access(path, os.X_OK)
+        ):
             raise ValueError(f"Brak wykonywalnego pliku pakietu: {path}")
     digest = hashlib.sha256()
-    with (package / "bin/codex").open("rb") as binary:
+    with (package / "bin" / f"codex{suffix}").open("rb") as binary:
         while chunk := binary.read(1024 * 1024):
             digest.update(chunk)
     build_id = f"{identity[0]}-{identity[1]}-{digest.hexdigest()[:12]}"
-    return package, build_id
+    return package, build_id, target
 
 
 def install_package(package: Path, home: Path, build_id: str) -> Path:
@@ -59,7 +68,7 @@ def install_package(package: Path, home: Path, build_id: str) -> Path:
 
     installed = releases / build_id
     if installed.exists():
-        existing, existing_id = validate_package(installed)
+        existing, existing_id, _ = validate_package(installed)
         if existing_id != build_id:
             raise ValueError(f"Istniejący pakiet ma inną zawartość: {installed}")
         return existing
@@ -153,11 +162,16 @@ def clone_state(source: Path, destination: Path) -> None:
 
 
 def install(package: Path, home: Path, source: Path, clone: bool | None) -> None:
-    package, build_id = validate_package(package)
+    package, build_id, target = validate_package(package)
+    windows = is_windows_target(target)
     destination = home / ".codex-v2"
     current = home / ".local/lib/codex-v2/current"
-    wrapper = home / ".local/bin/codex-v2"
-    if (current.exists() or current.is_symlink()) and not current.is_symlink():
+    wrapper = home / ".local/bin" / ("codex-v2.cmd" if windows else "codex-v2")
+    if (
+        not windows
+        and (current.exists() or current.is_symlink())
+        and not current.is_symlink()
+    ):
         raise ValueError(f"Ścieżka buildu nie jest dowiązaniem: {current}")
     if wrapper.is_symlink():
         raise ValueError(f"Wrapper jest dowiązaniem: {wrapper}. Nie nadpisuję go.")
@@ -193,22 +207,36 @@ def install(package: Path, home: Path, source: Path, clone: bool | None) -> None
     package = install_package(package, home, build_id)
     current.parent.mkdir(parents=True, exist_ok=True)
     wrapper.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=current.parent) as temp:
-        link = Path(temp) / "current"
-        link.symlink_to(package, target_is_directory=True)
-        link.replace(current)
-    # Quote literal paths: spaces and shell metacharacters in HOME are valid.
+    if not windows:
+        with tempfile.TemporaryDirectory(dir=current.parent) as temp:
+            link = Path(temp) / "current"
+            link.symlink_to(package, target_is_directory=True)
+            link.replace(current)
     with tempfile.TemporaryDirectory(dir=wrapper.parent) as temp:
-        launcher = Path(temp) / "codex-v2"
-        launcher.write_text(
-            "#!/bin/sh\nexec env "
-            + shlex.quote(f"CODEX_HOME={destination}")
-            + " "
-            + shlex.quote(str(current / "bin/codex"))
-            + ' --no-daemon "$@"\n',
-            encoding="utf-8",
-        )
-        launcher.chmod(0o755)
+        launcher = Path(temp) / wrapper.name
+        if windows:
+            # Percent signs expand environment variables in cmd.exe, including
+            # inside quotes. Doubling them preserves literal path characters.
+            state = str(destination).replace("%", "%%")
+            executable = str(package / "bin/codex.exe").replace("%", "%%")
+            launcher.write_text(
+                "@echo off\r\n"
+                "setlocal\r\n"
+                f'set "CODEX_HOME={state}"\r\n'
+                f'"{executable}" --no-daemon %*\r\n',
+                encoding="utf-8",
+            )
+        else:
+            # Quote literal paths: spaces and shell metacharacters in HOME are valid.
+            launcher.write_text(
+                "#!/bin/sh\nexec env "
+                + shlex.quote(f"CODEX_HOME={destination}")
+                + " "
+                + shlex.quote(str(current / "bin/codex"))
+                + ' --no-daemon "$@"\n',
+                encoding="utf-8",
+            )
+            launcher.chmod(0o755)
         launcher.replace(wrapper)
     print(
         f"Zainstalowano pakiet {package}\n"
@@ -231,8 +259,6 @@ def main() -> int:
     choice.add_argument("--no-clone-state", dest="clone", action="store_false")
     parser.set_defaults(clone=None)
     args = parser.parse_args()
-    if os.name != "posix":
-        parser.error("Ten wrapper wymaga macOS lub Linux.")
     try:
         install(
             args.package_dir, Path.home(), args.source_home.expanduser(), args.clone

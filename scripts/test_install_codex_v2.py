@@ -103,6 +103,42 @@ class InstallCodexV2Test(unittest.TestCase):
         self.assertTrue((release_home / ".local/lib/codex-v2/current").is_symlink())
         self.assertIn("Zainstalowano pakiet", result.stdout)
 
+    def test_windows_package_creates_cmd_wrapper_without_symlink(self):
+        windows_package = self.home / "windows-package"
+        (windows_package / "bin").mkdir(parents=True)
+        (windows_package / "codex-package.json").write_text(
+            json.dumps(
+                {
+                    "version": "1.2.3",
+                    "target": "x86_64-pc-windows-msvc",
+                    "variant": "codex",
+                }
+            )
+        )
+        for name in ("codex.exe", "codex-code-mode-host.exe"):
+            (windows_package / "bin" / name).write_bytes(b"windows binary")
+        windows_home = Path(self.temp.name) / "home %USERNAME% with spaces"
+        windows_home.mkdir()
+
+        installer.install(
+            windows_package,
+            windows_home,
+            windows_home / ".codex",
+            clone=False,
+        )
+
+        wrapper = windows_home / ".local/bin/codex-v2.cmd"
+        installed = next((windows_home / ".local/lib/codex-v2/releases").iterdir())
+        self.assertFalse((windows_home / ".local/lib/codex-v2/current").exists())
+        self.assertEqual(
+            wrapper.read_text(),
+            "@echo off\n"
+            "setlocal\n"
+            f'set "CODEX_HOME={str(windows_home / ".codex-v2").replace("%", "%%")}"\n'
+            f'"{str(installed / "bin/codex.exe").replace("%", "%%")}" '
+            "--no-daemon %*\n",
+        )
+
     def test_decline_and_empty_answer_create_clean_state(self):
         for answer in ("nie", ""):
             with (

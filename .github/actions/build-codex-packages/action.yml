@@ -14,6 +14,10 @@ inputs:
     description: Build and run the full smoke suite for the app-server package too.
     required: false
     default: "true"
+  use-sccache:
+    description: Cache Cargo downloads and Rust compiler outputs between workflow runs.
+    required: false
+    default: "false"
 
 # Resolve package sources relative to the action so it works in both repository layouts.
 runs:
@@ -90,6 +94,64 @@ runs:
         echo "CARGO_HOME=${cargo_home}" >> "$GITHUB_ENV"
         echo "${cargo_home}/bin" >> "$GITHUB_PATH"
         : > "${cargo_home}/config.toml"
+
+    - name: Compute Rust cache keys
+      if: ${{ inputs.use-sccache == 'true' }}
+      id: rust-cache-key
+      shell: bash
+      working-directory: codex-rs
+      run: |
+        set -euo pipefail
+        echo "lock=$(sha256sum Cargo.lock | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        echo "toolchain=$(sha256sum rust-toolchain.toml | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Cargo download cache
+      if: ${{ inputs.use-sccache == 'true' }}
+      id: cargo-home-cache
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          ${{ github.workspace }}/.cargo-home/registry/index/
+          ${{ github.workspace }}/.cargo-home/registry/cache/
+          ${{ github.workspace }}/.cargo-home/git/db/
+        key: codex-v2-cargo-home-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-${{ steps.rust-cache-key.outputs.lock }}-${{ steps.rust-cache-key.outputs.toolchain }}
+        restore-keys: |
+          codex-v2-cargo-home-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-
+
+    - name: Install sccache
+      if: ${{ inputs.use-sccache == 'true' }}
+      uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
+      with:
+        tool: sccache
+        version: 0.7.5
+
+    - name: Configure sccache
+      if: ${{ inputs.use-sccache == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "Using the sccache GitHub Actions backend."
+        else
+          echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
+          echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
+          echo "Using the local sccache fallback."
+        fi
+
+    - name: Restore sccache fallback
+      if: ${{ inputs.use-sccache == 'true' && env.SCCACHE_GHA_ENABLED != 'true' }}
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.sccache/
+        key: codex-v2-sccache-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-${{ steps.rust-cache-key.outputs.lock }}-${{ github.run_id }}
+        restore-keys: |
+          codex-v2-sccache-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-${{ steps.rust-cache-key.outputs.lock }}-
+          codex-v2-sccache-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-
 
     - name: Install Zig
       if: ${{ runner.os == 'Linux' }}
@@ -330,3 +392,38 @@ runs:
         "${executable}" --version
         "${executable}" --help >/dev/null
         "${executable}" features list >/dev/null
+
+    - name: Save Cargo download cache
+      if: ${{ always() && !cancelled() && inputs.use-sccache == 'true' && steps.cargo-home-cache.outputs.cache-hit != 'true' }}
+      continue-on-error: true
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          ${{ github.workspace }}/.cargo-home/registry/index/
+          ${{ github.workspace }}/.cargo-home/registry/cache/
+          ${{ github.workspace }}/.cargo-home/git/db/
+        key: codex-v2-cargo-home-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-${{ steps.rust-cache-key.outputs.lock }}-${{ steps.rust-cache-key.outputs.toolchain }}
+
+    - name: Save sccache fallback
+      if: ${{ always() && !cancelled() && inputs.use-sccache == 'true' && env.SCCACHE_GHA_ENABLED != 'true' }}
+      continue-on-error: true
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.sccache/
+        key: codex-v2-sccache-${{ runner.os }}-${{ inputs.target }}-${{ inputs.build-mode }}-${{ steps.rust-cache-key.outputs.lock }}-${{ github.run_id }}
+
+    - name: Report sccache statistics
+      if: ${{ always() && inputs.use-sccache == 'true' }}
+      continue-on-error: true
+      shell: bash
+      run: |
+        {
+          echo "### sccache — ${{ inputs.target }}"
+          echo
+          echo '```'
+          sccache --show-stats || true
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"

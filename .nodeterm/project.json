@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "rev": 5,
-  "savedAt": "2026-09-23T15:37:30.542Z",
+  "rev": 8,
+  "savedAt": "2026-09-24T14:57:05.510Z",
   "id": "project-1n1n3vo",
   "name": "codex",
   "color": "#ff9f0a",
   "viewport": {
     "x": -408.6413022463971,
-    "y": 199.34983303105957,
+    "y": 225.10569375540746,
     "zoom": 1
   },
   "nodes": [
@@ -17,6 +17,26 @@
       "position": {
         "x": 488.6413022463971,
         "y": -119.34983303105956
+      },
+      "size": {
+        "width": 640,
+        "height": 440
+      },
+      "title": "Codex",
+      "titleAuto": true,
+      "color": "#10a37f",
+      "group": null,
+      "tags": [],
+      "collapsed": false,
+      "cwd": ".",
+      "agentId": "codex"
+    },
+    {
+      "id": "term-mufle91j-98915f1d",
+      "kind": "terminal",
+      "position": {
+        "x": 950.7608802428697,
+        "y": -145.10569375540746
       },
       "size": {
         "width": 640,

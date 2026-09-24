@@ -1,6 +1,6 @@
 # Lokalny `codex-v2`: konfiguracja, prompty i instalacja
 
-Instrukcja dla zmian w tym checkoutcie, zweryfikowana 23.09.2026 na macOS Apple Silicon. Nowe parametry nie są dostępne automatycznie w CLI instalowanym przez npm lub Homebrew. Trzeba uruchomić build zawierający tę poprawkę.
+Instrukcja dla zmian w tym checkoutcie, zweryfikowana 24.09.2026 na macOS Apple Silicon. Nowe parametry nie są dostępne automatycznie w CLI instalowanym przez npm lub Homebrew. Trzeba uruchomić build zawierający tę poprawkę.
 
 ## 1. Co oznacza nowy i stary flow
 
@@ -30,7 +30,7 @@ Istotne ograniczenia:
 
 ## 2. Instalacja pod nazwą `codex-v2`
 
-Układ instalacji:
+Układ instalacji na macOS:
 
 ```text
 ~/.local/bin/codex-v2                     # wrapper dostępny w PATH
@@ -39,11 +39,15 @@ Układ instalacji:
 ~/.codex-v2/                             # osobna konfiguracja, auth i sesje
 ```
 
+Na Windows instalator tworzy `%USERPROFILE%\.local\bin\codex-v2.cmd` i uruchamia z niego bezpośrednio wersjonowany `codex.exe`. Nie tworzy dowiązania `current`, bo jego obsługa zależy od ustawień systemu i trybu deweloperskiego. Stan nadal znajduje się w `%USERPROFILE%\.codex-v2`.
+
 Zwykłe `codex` zachowuje swoją nazwę i instalację. Wrapper ustawia własny `CODEX_HOME` tylko dla uruchamianego procesu oraz używa `--no-daemon`, aby testowana wersja nie podłączała się do wspólnego serwera starego CLI. Pliki projektu i jego lokalna konfiguracja `.codex/` pozostają wspólne, jeśli oba programy uruchomisz w tym samym repozytorium.
 
 ### Zalecane: gotowa paczka z GitHub Release
 
-Workflow [codex-v2-release.yml](.github/workflows/codex-v2-release.yml) uruchamia się po utworzeniu release'a. Buduje i testuje paczki dla macOS ARM64/Intel oraz Linux ARM64/x64, generuje `codex-v2_SHA256SUMS` i dopina wszystko do tego samego release'a. Użyj tagu w formacie `codex-v2-vX.Y.Z`, np. `codex-v2-v0.1.0`; tag ma wskazywać kod, który chcesz zbudować.
+Workflow [codex-v2-release.yml](.github/workflows/codex-v2-release.yml) uruchamia się po utworzeniu release'a. Obecnie buduje i testuje dwie paczki: macOS ARM64 (`aarch64-apple-darwin`) oraz Windows x64 (`x86_64-pc-windows-msvc`). Generuje `codex-v2_SHA256SUMS` i dopina wszystko do tego samego release'a. Użyj tagu w formacie `codex-v2-vX.Y.Z`, np. `codex-v2-v0.1.0`; tag ma wskazywać kod, który chcesz zbudować.
+
+Build korzysta z osobnego cache pobranych zależności Cargo oraz `sccache` dla każdego systemu, targetu, profilu i wersji `Cargo.lock`. Pierwsze uruchomienie dla danego zestawu nadal kompiluje cały projekt. Ponowienie tego samego release'a oraz zgodne wpisy cache dostępne z gałęzi domyślnej skracają kolejne kompilacje. Statystyki trafień są widoczne w podsumowaniu każdego joba.
 
 Na tym Macu wybierz `aarch64-apple-darwin`. Pobierz z release'a archiwum `codex-v2-<wersja>-aarch64-apple-darwin.tar.gz` i plik sum, a następnie:
 
@@ -55,7 +59,21 @@ cd codex-v2
 python3 install-codex-v2.py
 ```
 
-Instalator kopiuje paczkę do wersjonowanego katalogu pod `~/.local/lib/codex-v2/releases`, więc po zakończeniu można usunąć pobrane archiwum i katalog po rozpakowaniu. Aktualizacja polega na pobraniu nowego release'a i ponownym uruchomieniu jego instalatora; stan w `~/.codex-v2` zostaje zachowany.
+Na Windows x64 pobierz `codex-v2-<wersja>-x86_64-pc-windows-msvc.tar.gz` i `codex-v2_SHA256SUMS`, a następnie w PowerShellu uruchom:
+
+```powershell
+$Archive = Get-ChildItem .\codex-v2-*-x86_64-pc-windows-msvc.tar.gz | Select-Object -First 1
+$Expected = (Select-String -Path .\codex-v2_SHA256SUMS -Pattern ([regex]::Escape($Archive.Name))).Line.Split(' ')[0]
+$Actual = (Get-FileHash -Algorithm SHA256 $Archive.FullName).Hash.ToLowerInvariant()
+if ($Actual -ne $Expected) { throw "Nieprawidłowa suma SHA-256 paczki" }
+tar -xzf $Archive.FullName
+Set-Location .\codex-v2
+py .\install-codex-v2.py
+```
+
+Dodaj `%USERPROFILE%\.local\bin` do zmiennej użytkownika `PATH`, otwórz nowy PowerShell i sprawdź `codex-v2 --version`. Jeżeli polecenie `py` nie istnieje, zainstaluj Python 3.10+ albo użyj `python .\install-codex-v2.py`.
+
+Instalator kopiuje paczkę do wersjonowanego katalogu pod `.local/lib/codex-v2/releases` w katalogu użytkownika, więc po zakończeniu można usunąć pobrane archiwum i katalog po rozpakowaniu. Aktualizacja polega na pobraniu nowego release'a i ponownym uruchomieniu jego instalatora; stan w `.codex-v2` zostaje zachowany.
 
 Workflow musi znajdować się na domyślnej gałęzi przed utworzeniem release'a. Trigger `created` nie działa dla draftów. Jeśli release utworzył inny workflow za pomocą jego `GITHUB_TOKEN` albo chcesz ponowić nieudany build, uruchom ręcznie workflow **codex-v2 release packages** i podaj istniejący tag. Ręczne uruchomienie nadpisuje aktywa o tych samych nazwach.
 

@@ -77,12 +77,8 @@ jobs:
         include:
           - runner: macos-15
             target: aarch64-apple-darwin
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-          - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
-          - runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout released source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -97,6 +93,7 @@ jobs:
           package-version: ${{ needs.metadata.outputs.package-version }}
           build-mode: release
           include-app-server: "false"
+          use-sccache: "true"
 
       - name: Add codex-v2 installer
         shell: bash
@@ -121,9 +118,10 @@ jobs:
           import tarfile
 
           archive, target = sys.argv[1:]
+          suffix = ".exe" if "windows" in target else ""
           required = {
-              "codex-v2/bin/codex",
-              "codex-v2/bin/codex-code-mode-host",
+              f"codex-v2/bin/codex{suffix}",
+              f"codex-v2/bin/codex-code-mode-host{suffix}",
               "codex-v2/codex-package.json",
               "codex-v2/install-codex-v2.py",
               "codex-v2/README.md",
