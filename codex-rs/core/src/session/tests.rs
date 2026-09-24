@@ -18,7 +18,6 @@ use crate::config::ConfigBuilder;
 use crate::config::ConfigOverrides;
 use crate::context::ContextualUserFragment;
 use crate::context::DeveloperInstructions;
-use crate::context::GuardianContextMode;
 use crate::context::TurnAborted;
 use crate::environment_selection::EnvironmentConfigOrigin;
 use crate::environment_selection::ThreadEnvironments;
@@ -26,6 +25,7 @@ use crate::environment_selection::TurnEnvironmentState;
 use crate::function_tool::FunctionCallError;
 use crate::hook_mcp_executor::CoreHookMcpExecutor;
 use crate::plugins::plugins_manager_for_config;
+use crate::realtime_conversation::RealtimeConversationSnapshot;
 use crate::session::step_context::StepContext;
 use crate::shell::default_user_shell;
 use crate::shell_snapshot::ShellSnapshot;
@@ -275,6 +275,10 @@ impl StepContext {
             ),
             settings: Arc::new(settings),
             session_telemetry: turn.session_telemetry.clone(),
+            realtime: RealtimeConversationSnapshot {
+                active: turn.realtime_active,
+                mode_instructions: None,
+            },
             turn: Arc::clone(&turn),
             environments,
             selected_capability_roots: Vec::new(),
@@ -612,7 +616,7 @@ async fn regular_turn_emits_turn_started_with_trace_id_without_waiting_for_start
     });
 
     sess.set_session_startup_prewarm(
-        crate::session_startup_prewarm::SessionStartupPrewarmHandle::new(
+        crate::session::startup_prewarm::SessionStartupPrewarmHandle::new(
             handle,
             std::time::Instant::now(),
             crate::client::WEBSOCKET_CONNECT_TIMEOUT,
@@ -768,7 +772,7 @@ async fn interrupting_regular_turn_waiting_on_startup_prewarm_emits_turn_aborted
     });
 
     sess.set_session_startup_prewarm(
-        crate::session_startup_prewarm::SessionStartupPrewarmHandle::new(
+        crate::session::startup_prewarm::SessionStartupPrewarmHandle::new(
             handle,
             std::time::Instant::now(),
             crate::client::WEBSOCKET_CONNECT_TIMEOUT,
@@ -842,6 +846,7 @@ fn test_model_client_session() -> crate::client::ModelClientSession {
         codex_model_provider::WorkspaceRoutingContext::new(
             "https://chatgpt.com/backend-api".into(),
         ),
+        Vec::new(),
     )
     .new_session()
 }
@@ -6396,10 +6401,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     );
 
     let mut state = SessionState::new(session_configuration.clone());
-    state.history = ContextManager::with_guardian_context_mode(
-        GuardianContextMode::from_features(&config.features),
-        &session_configuration.session_source,
-    );
+    state.history = ContextManager::for_session(&session_configuration.session_source);
     let (environment_manager, resolved_environments) =
         resolved_environments_for_configuration(&session_configuration, &default_environments)
             .await;
@@ -6523,6 +6525,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
             /*attestation_provider*/ None,
             config.http_client_factory(),
             config.workspace_routing_context(),
+            Vec::new(),
         ),
         executed_tool_calls: executed_tool_calls.clone(),
         code_mode_service: crate::tools::code_mode::CodeModeService::new(
@@ -6544,7 +6547,7 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
         thread_settings_persistence: Semaphore::new(/*permits*/ 1),
         managed_network_proxy_refresh_lock: Semaphore::new(/*permits*/ 1),
         features: config.features.clone(),
-        guardian_context_mode: GuardianContextMode::from_features(&config.features),
+
         isolation: codex_extension_api::SessionIsolation::Inherit,
         tool_policy: Arc::default(),
         windows_sandbox_proxy_settings_mode:
@@ -8288,6 +8291,10 @@ async fn shutdown_complete_does_not_append_to_thread_store_after_shutdown() {
     assert!(session.async_hook_results.is_empty());
     assert!(result_sender.is_closed());
 
+    assert!(session.services.model_client.responses_websocket_enabled());
+    session.schedule_startup_prewarm().await;
+    assert!(session.state.lock().await.startup_prewarm.is_none());
+
     assert_eq!(
         codex_thread_store::InMemoryThreadStoreCalls {
             create_thread: 1,
@@ -8667,10 +8674,7 @@ where
     );
 
     let mut state = SessionState::new(session_configuration.clone());
-    state.history = ContextManager::with_guardian_context_mode(
-        GuardianContextMode::from_features(&config.features),
-        &session_configuration.session_source,
-    );
+    state.history = ContextManager::for_session(&session_configuration.session_source);
     let (environment_manager, resolved_turn_environments) =
         resolved_environments_for_configuration(&session_configuration, &default_environments)
             .await;
@@ -8793,6 +8797,7 @@ where
             /*attestation_provider*/ None,
             config.http_client_factory(),
             config.workspace_routing_context(),
+            Vec::new(),
         ),
         executed_tool_calls: executed_tool_calls.clone(),
         code_mode_service: crate::tools::code_mode::CodeModeService::new(
@@ -8814,7 +8819,7 @@ where
         thread_settings_persistence: Semaphore::new(/*permits*/ 1),
         managed_network_proxy_refresh_lock: Semaphore::new(/*permits*/ 1),
         features: config.features.clone(),
-        guardian_context_mode: GuardianContextMode::from_features(&config.features),
+
         isolation: codex_extension_api::SessionIsolation::Inherit,
         tool_policy: Arc::default(),
         windows_sandbox_proxy_settings_mode:

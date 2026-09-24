@@ -40,6 +40,17 @@ const _: Option<&dyn AgentControl> = None;
 pub trait AgentControl: Send + Sync {
     fn identity(&self) -> SessionId;
 
+    /// Resolve an ID or a name relative to the caller's captured source, without loading.
+    /// The local backend lazily registers callers with no parent before resolving, including
+    /// for direct IDs. Keeping resolution separate preserves tool error and analytics ordering.
+    fn resolve<'a>(
+        &'a self,
+        caller: ThreadId,
+        parent: Option<ThreadId>,
+        source: &'a SessionSource,
+        target: &'a str,
+    ) -> BoxFuture<'a, Result<ThreadId>>;
+
     /// Start a child and accept its initial input, returning its effective settings.
     fn spawn(
         &self,
@@ -51,6 +62,11 @@ pub trait AgentControl: Send + Sync {
     /// the root. Legacy user input can address loaded threads outside the agent registry.
     fn send(&self, request: SendRequest) -> BoxFuture<'_, Result<DeliveryReceipt>>;
 
+    /// Load a recorded V2 child through its live immediate parent, without sending input.
+    /// Implementations validate ownership and restore the child under the parent's current
+    /// authority. Success makes the child available for attachment through its thread manager.
+    fn ensure_child_loaded(&self, parent: ThreadId, child: ThreadId) -> BoxFuture<'_, Result<()>>;
+
     /// Stop current work and return the pre-interrupt snapshot. V2 rejects root/self
     /// targets and tolerates known unloaded agents; other modes retain direct-ID interruption.
     fn interrupt(
@@ -61,12 +77,19 @@ pub trait AgentControl: Send + Sync {
     ) -> BoxFuture<'_, Result<AgentInfo>>;
 
     /// List loaded agents using the caller's captured source to resolve a path prefix.
-    /// Callers own model and UI formatting.
+    /// The local backend lazily registers callers with no parent. Callers own formatting.
     fn list<'a>(
         &'a self,
+        caller: ThreadId,
+        parent: Option<ThreadId>,
         source: &'a SessionSource,
         path_prefix: Option<&'a str>,
     ) -> BoxFuture<'a, Result<Vec<LiveAgent>>>;
+
+    /// Known direct children for V2 model context, including unloaded agents. Loaded
+    /// children come first, alphabetically within each group; an unknown parent yields none.
+    /// This reads existing membership without registering the parent or loading children.
+    fn child_agent_paths(&self, parent: ThreadId) -> BoxFuture<'_, Vec<AgentPath>>;
 
     /// Check capacity before accepting work. This advisory check does not reserve a slot.
     fn check_turn_admission(

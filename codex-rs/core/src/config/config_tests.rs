@@ -1263,6 +1263,7 @@ fn config_toml_deserializes_model_availability_nux() {
             question_esc_back: true,
             raw_output_mode: false,
             fullscreen_transcript: true,
+            copy_on_select: Default::default(),
             alternate_screen: AltScreenMode::default(),
             status_line: None,
             status_line_use_colors: true,
@@ -4402,6 +4403,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
             question_esc_back: true,
             raw_output_mode: false,
             fullscreen_transcript: true,
+            copy_on_select: Default::default(),
             alternate_screen: AltScreenMode::Auto,
             status_line: None,
             status_line_use_colors: true,
@@ -9898,6 +9900,7 @@ async fn metrics_exporter_defaults_to_statsig_when_missing() -> std::io::Result<
     .await?;
 
     assert_eq!(config.otel.metrics_exporter, OtelExporterKind::Statsig);
+    assert!(!config.otel.agent_response_logging_enabled());
     Ok(())
 }
 
@@ -9907,6 +9910,7 @@ async fn trace_exporter_defaults_to_none_when_log_exporter_is_set() -> std::io::
     let mut cfg = fixture.cfg.clone();
     cfg.otel = Some(OtelConfigToml {
         tool_result: toml::from_str("max_bytes = 8192").expect("tool-result logging config"),
+        log_agent_responses: Some(true),
         exporter: Some(OtelExporterKind::OtlpHttp {
             endpoint: "http://localhost:14318/v1/logs".to_string(),
             headers: HashMap::new(),
@@ -9928,6 +9932,7 @@ async fn trace_exporter_defaults_to_none_when_log_exporter_is_set() -> std::io::
     .await?;
 
     assert_eq!(config.otel.tool_result.max_bytes, 8192);
+    assert!(config.otel.agent_response_logging_enabled());
     assert!(matches!(
         config.otel.exporter,
         OtelExporterKind::OtlpHttp { .. }
@@ -11707,18 +11712,21 @@ shell_tool = false
     Ok(())
 }
 
-#[test]
-fn retired_personality_feature_requirements_do_not_reject_configured_values() -> std::io::Result<()>
-{
+#[test_case::test_case(Feature::Personality; "personality")]
+#[test_case::test_case(Feature::GuardianThreadContext; "guardian thread context")]
+fn retired_feature_requirements_do_not_pin_configured_values(
+    feature: Feature,
+) -> std::io::Result<()> {
+    let key = feature.key();
     for (configured, required) in [(true, false), (false, true)] {
         let cfg: ConfigToml = toml::from_str(&format!(
-            "[features]\npersonality = {configured}\nshell_tool = false\n"
+            "[features]\n\"{key}\" = {configured}\nshell_tool = false\n"
         ))
         .expect("valid config");
         let requirement = Sourced::new(
             FeatureRequirementsToml {
                 entries: BTreeMap::from([
-                    ("personality".to_string(), required),
+                    (key.to_string(), required),
                     ("shell_tool".to_string(), false),
                 ]),
             },
@@ -11745,11 +11753,15 @@ fn retired_personality_feature_requirements_do_not_reject_configured_values() ->
         )?;
         assert_eq!(
             (
-                features.enabled(Feature::Personality),
+                features.enabled(feature),
                 features.enabled(Feature::ShellTool),
-                warnings,
+                warnings.len(),
             ),
-            (false, false, Vec::new()),
+            (
+                Features::with_defaults().enabled(feature),
+                false,
+                usize::from(feature == Feature::GuardianThreadContext),
+            ),
         );
     }
 
@@ -12004,6 +12016,7 @@ tool_namespace = "agents"
 hide_spawn_agent_metadata = true
 expose_spawn_agent_model_overrides = false
 wait_agent_enabled = false
+disable_direct_message = true
 non_code_mode_only = true
 
 [agents]
@@ -12059,6 +12072,7 @@ max_concurrent_threads_per_session = 9
     assert!(config.multi_agent_v2.hide_spawn_agent_metadata);
     assert!(!config.multi_agent_v2.expose_spawn_agent_model_overrides);
     assert!(!config.multi_agent_v2.wait_agent_enabled);
+    assert!(config.multi_agent_v2.disable_direct_message);
     assert!(config.multi_agent_v2.non_code_mode_only);
 
     Ok(())

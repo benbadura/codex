@@ -109,7 +109,12 @@ impl Handler {
                 let agents = session
                     .services
                     .agent_control
-                    .list(&turn.session_source, /*path_prefix*/ None)
+                    .list(
+                        session.thread_id,
+                        turn.parent_thread_id,
+                        &turn.session_source,
+                        /*path_prefix*/ None,
+                    )
                     .await
                     .map_err(collab_spawn_error)?;
                 let has_active_agents = agents.iter().any(|agent| {
