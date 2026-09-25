@@ -59,6 +59,24 @@ fn attach_thread(app: &mut App, thread_id: ThreadId) {
     });
 }
 
+#[tokio::test]
+async fn live_session_usage_is_visible_at_the_bottom_of_the_owned_screen() -> Result<()> {
+    let (mut app, _events, _ops) = make_test_app_with_channels().await;
+    app.session_usage_live_visible = true;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    let size = Size::new(/*width*/ 80, /*height*/ 24);
+
+    app.render_owned_transcript(&mut tui, size)?;
+
+    let rendered = buffer_text(crate::custom_terminal::test_support::last_rendered_buffer(
+        &tui.terminal,
+    ));
+    let last_row = rendered.lines().last().expect("usage row");
+    insta::assert_snapshot!("fullscreen_live_session_usage", last_row);
+    Ok(())
+}
+
 pub(super) fn buffer_text(buffer: &Buffer) -> String {
     buffer
         .content()

@@ -211,6 +211,31 @@ impl Renderable for UsageView {
 }
 
 impl App {
+    pub(in crate::app) fn session_usage_live_line(
+        &self,
+        dashboard_visible: bool,
+    ) -> Option<Line<'static>> {
+        (self.session_usage_live_visible && !dashboard_visible).then(|| {
+            let id = self
+                .chat_widget
+                .thread_id()
+                .map(|id| id.to_string())
+                .unwrap_or_default();
+            let toggle_key = self
+                .keymap
+                .app
+                .open_session_usage
+                .first()
+                .map(crate::key_hint::KeyBinding::display_label)
+                .unwrap_or_else(|| "usage key".to_string());
+            let usage = self
+                .session_usage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            usage.compact_line(&usage.root(&id), &toggle_key)
+        })
+    }
+
     pub(in crate::app) fn toggle_session_usage_live(&mut self, tui: &Tui) {
         self.session_usage_live_visible = !self.session_usage_live_visible;
         tui.frame_requester().schedule_frame();

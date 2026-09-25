@@ -1209,25 +1209,7 @@ impl App {
             self.schedule_immediate_resize_reflow(tui);
             self.maybe_run_resize_reflow(tui, screen_size)?;
         }
-        let live_usage_line = (self.session_usage_live_visible && !dashboard_visible).then(|| {
-            let id = self
-                .chat_widget
-                .thread_id()
-                .map(|id| id.to_string())
-                .unwrap_or_default();
-            let toggle_key = self
-                .keymap
-                .app
-                .open_session_usage
-                .first()
-                .map(crate::key_hint::KeyBinding::display_label)
-                .unwrap_or_else(|| "usage key".to_string());
-            let usage = self
-                .session_usage
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            usage.compact_line(&usage.root(&id), &toggle_key)
-        });
+        let live_usage_line = self.session_usage_live_line(dashboard_visible);
         self.with_chat_widget_frame(screen_size.width, |desired_height, chat_widget| {
             let desired_height = if dashboard_visible {
                 screen_size.height

@@ -91,6 +91,12 @@ impl App {
         .then(crate::bottom_pane::ComposerGap::default);
         let mut prompt_footer =
             self.prompt_navigation_footer(screen_size.width.saturating_sub(/*rhs*/ 2));
+        let dashboard_visible = self
+            .chat_widget
+            .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
+            .is_some();
+        let live_usage_line = self.session_usage_live_line(dashboard_visible);
+        let usage_height = u16::from(live_usage_line.is_some() && screen_size.height > 0);
         let chat_widget = &self.chat_widget;
         let view = &mut self.transcript_view;
         let active_key = chat_widget.active_cell_transcript_key();
@@ -115,15 +121,14 @@ impl App {
             },
             composer_gap.as_ref(),
         );
-        let dashboard_visible = chat_widget
-            .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
-            .is_some();
+        let max_bottom_pane_height = screen_size.height.saturating_sub(usage_height);
         let bottom_height = if dashboard_visible {
             screen_size.height
         } else {
             bottom
                 .desired_height(screen_size.width)
-                .min(screen_size.height)
+                .min(max_bottom_pane_height)
+                .saturating_add(usage_height)
         };
         drop(bottom);
         let available = screen_size.height.saturating_sub(bottom_height);
@@ -181,16 +186,14 @@ impl App {
                 },
                 composer_gap.as_ref(),
             );
-            footer_height_changed = !dashboard_visible
-                && bottom
-                    .desired_height(screen_size.width)
-                    .min(screen_size.height)
-                    != bottom_height;
+            let desired_bottom_height = bottom
+                .desired_height(screen_size.width)
+                .min(max_bottom_pane_height)
+                .saturating_add(usage_height);
+            footer_height_changed = !dashboard_visible && desired_bottom_height != bottom_height;
             if footer_height_changed && composer_gap.as_ref().is_some_and(|gap| gap.needs_separator)
             {
-                bottom_area.height = bottom
-                    .desired_height(screen_size.width)
-                    .min(screen_size.height);
+                bottom_area.height = desired_bottom_height;
                 bottom_area.y = screen_size.height.saturating_sub(bottom_area.height);
                 // Resolve controls with the compact viewport first, then make room for
                 // their separator. Resizing must not preserve a stale return control.
@@ -202,7 +205,24 @@ impl App {
                 );
                 footer_height_changed = false;
             }
-            bottom.render(bottom_area, frame.buffer);
+            let bottom_pane_area = Rect {
+                height: bottom_area.height.saturating_sub(usage_height),
+                ..bottom_area
+            };
+            bottom.render(bottom_pane_area, frame.buffer);
+            if let Some(line) = live_usage_line.clone()
+                && usage_height > 0
+            {
+                Paragraph::new(line).render(
+                    Rect::new(
+                        bottom_area.x,
+                        bottom_pane_area.bottom(),
+                        bottom_area.width,
+                        usage_height,
+                    ),
+                    frame.buffer,
+                );
+            }
             let follow_area = if let Some(gap) = composer_gap.as_ref() {
                 Some(Rect {
                     width: transcript_width,
@@ -222,9 +242,9 @@ impl App {
             feedback_tick =
                 view.render_composer_gap(follow_area, composer_hint.as_ref(), frame.buffer, now);
             chat_widget.note_rendered_width(screen_size.width);
-            rendered_cursor = bottom.cursor_pos(bottom_area);
+            rendered_cursor = bottom.cursor_pos(bottom_pane_area);
             if let Some(position) = rendered_cursor {
-                frame.set_cursor_style(bottom.cursor_style(bottom_area));
+                frame.set_cursor_style(bottom.cursor_style(bottom_pane_area));
                 frame.set_cursor_position(position);
             }
         })?;
