@@ -17,6 +17,7 @@ fn usage(input: i64, cached: i64, output: i64) -> Tokens {
 fn agent(model: &str) -> AgentUsage {
     AgentUsage {
         model: model.into(),
+        reasoning_effort: Some(ReasoningEffort::Max),
         turns: BTreeMap::from([("turn".into(), (Instant::now(), None))]),
         ..Default::default()
     }
@@ -254,6 +255,23 @@ fn dashboard_groups_descendants_without_other_sessions_or_double_counting_cache(
 }
 
 #[test]
+fn compact_line_keeps_parent_and_subagent_usage_visible_in_chat() {
+    let (ledger, _) = dashboard();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(
+        /*width*/ 100, /*height*/ 1,
+    ))
+    .expect("terminal");
+    terminal
+        .draw(|frame| {
+            use ratatui::widgets::Widget;
+            ratatui::widgets::Paragraph::new(ledger.compact_line("root", "F5"))
+                .render(frame.area(), frame.buffer_mut());
+        })
+        .expect("render");
+    insta::assert_snapshot!("session_usage_compact_line", terminal.backend());
+}
+
+#[test]
 fn missing_usage_and_incomplete_observation_are_visible() {
     let ledger = SessionUsage {
         incomplete: true,
@@ -266,7 +284,7 @@ fn missing_usage_and_incomplete_observation_are_visible() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(text.contains("Waiting for usage"));
-    assert!(text.contains("Partial data"));
+    assert!(text.contains("Some agent details may be incomplete"));
 }
 
 #[tokio::test]
@@ -331,6 +349,78 @@ async fn app_tracks_background_usage_without_opening_dashboard() {
     .await
     .expect("metadata resolves without a thread/started notification");
     assert!(!app.session_usage.lock().expect("usage lock").incomplete);
+    server.shutdown().await.expect("shutdown");
+}
+
+#[tokio::test]
+async fn selected_parent_uses_live_metadata_without_false_partial_warning() {
+    let mut app = super::super::test_support::make_test_app().await;
+    let thread_id = codex_protocol::ThreadId::new();
+    app.chat_widget
+        .handle_thread_session_quiet(crate::session_state::ThreadSessionState {
+            windows_sandbox_host: crate::app::WindowsSandboxHost::Local,
+            thread_id,
+            forked_from_id: None,
+            fork_parent_title: None,
+            thread_name: None,
+            model: "gpt-6-luna".into(),
+            model_provider_id: "openai".into(),
+            service_tier: None,
+            approval_policy: codex_app_server_protocol::AskForApproval::Never,
+            approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer::User,
+            permission_profile: codex_protocol::models::PermissionProfile::read_only(),
+            active_permission_profile: None,
+            cwd: app.config.cwd.clone(),
+            runtime_workspace_roots: Vec::new(),
+            instruction_source_paths: Vec::new(),
+            reasoning_effort: Some(ReasoningEffort::Max),
+            collaboration_mode: None,
+            personality: None,
+            message_history: None,
+            network_proxy: None,
+            rollout_path: None,
+        });
+    app.primary_thread_id = Some(thread_id);
+    let server = crate::start_embedded_app_server_for_picker(app.chat_widget.config_ref())
+        .await
+        .expect("server");
+    let id = app
+        .chat_widget
+        .thread_id()
+        .expect("selected parent")
+        .to_string();
+    let tokens = TokenUsageBreakdown {
+        input_tokens: 100,
+        cached_input_tokens: 50,
+        output_tokens: 20,
+        total_tokens: 120,
+        cache_write_input_tokens: 0,
+        reasoning_output_tokens: 5,
+    };
+    app.handle_app_server_event(
+        &server,
+        codex_app_server_client::AppServerEvent::ServerNotification(Box::new(
+            ServerNotification::ThreadTokenUsageUpdated(ThreadTokenUsageUpdatedNotification {
+                thread_id: id.clone(),
+                turn_id: "turn".into(),
+                token_usage: ThreadTokenUsage {
+                    total: tokens.clone(),
+                    last: tokens,
+                    model_context_window: None,
+                },
+            }),
+        )),
+    )
+    .await;
+    {
+        let usage = app.session_usage.lock().expect("usage lock");
+        assert!(usage.agents[&id].metadata_requested);
+        assert_eq!(
+            usage.agents[&id].reasoning_effort,
+            app.chat_widget.current_reasoning_effort()
+        );
+        assert!(!usage.incomplete);
+    }
     server.shutdown().await.expect("shutdown");
 }
 

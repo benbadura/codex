@@ -96,6 +96,7 @@ pub(crate) async fn make_test_app() -> App {
         agent_navigation: AgentNavigationState::default(),
         agents_overview: Default::default(),
         session_usage: Default::default(),
+        session_usage_live_visible: false,
         side_threads: HashMap::new(),
         abandoned_side_threads: HashSet::new(),
         active_thread_id: None,

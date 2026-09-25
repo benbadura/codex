@@ -174,6 +174,7 @@ use ratatui::layout::Size;
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Widget;
 use ratatui::widgets::Wrap;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -654,6 +655,7 @@ pub(crate) struct App {
     agent_navigation: AgentNavigationState,
     agents_overview: agents_overview::AgentsOverviewState,
     session_usage: Arc<std::sync::Mutex<session_usage::SessionUsage>>,
+    session_usage_live_visible: bool,
     side_threads: HashMap<ThreadId, SideThreadState>,
     abandoned_side_threads: HashSet<ThreadId>,
     active_thread_id: Option<ThreadId>,
@@ -1207,20 +1209,54 @@ impl App {
             self.schedule_immediate_resize_reflow(tui);
             self.maybe_run_resize_reflow(tui, screen_size)?;
         }
+        let live_usage_line = (self.session_usage_live_visible && !dashboard_visible).then(|| {
+            let id = self
+                .chat_widget
+                .thread_id()
+                .map(|id| id.to_string())
+                .unwrap_or_default();
+            let toggle_key = self
+                .keymap
+                .app
+                .open_session_usage
+                .first()
+                .map(crate::key_hint::KeyBinding::display_label)
+                .unwrap_or_else(|| "usage key".to_string());
+            let usage = self
+                .session_usage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            usage.compact_line(&usage.root(&id), &toggle_key)
+        });
         self.with_chat_widget_frame(screen_size.width, |desired_height, chat_widget| {
             let desired_height = if dashboard_visible {
                 screen_size.height
             } else {
-                desired_height
+                desired_height.saturating_add(u16::from(live_usage_line.is_some()))
             };
             let mut rendered_area = Rect::default();
             tui.draw_with_resize_reflow(desired_height, screen_size, |frame| {
                 let area = frame.area();
                 rendered_area = area;
-                chat_widget.render(area, frame.buffer);
-                self.chat_widget.note_rendered_width(area.width);
-                if let Some((x, y)) = chat_widget.cursor_pos(area) {
-                    frame.set_cursor_style(chat_widget.cursor_style(area));
+                let usage_height = u16::from(live_usage_line.is_some() && area.height > 0);
+                let chat_area = Rect::new(
+                    area.x,
+                    area.y,
+                    area.width,
+                    area.height.saturating_sub(usage_height),
+                );
+                chat_widget.render(chat_area, frame.buffer);
+                if let Some(line) = live_usage_line.clone()
+                    && usage_height > 0
+                {
+                    Paragraph::new(line).render(
+                        Rect::new(area.x, chat_area.bottom(), area.width, usage_height),
+                        frame.buffer,
+                    );
+                }
+                self.chat_widget.note_rendered_width(chat_area.width);
+                if let Some((x, y)) = chat_widget.cursor_pos(chat_area) {
+                    frame.set_cursor_style(chat_widget.cursor_style(chat_area));
                     frame.set_cursor_position((x, y));
                 }
             })?;

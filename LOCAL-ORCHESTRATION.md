@@ -328,15 +328,16 @@ Jeśli chcesz porównać wyłącznie wpływ timeoutów, w obu przebiegach nie wy
 ### Podgląd zużycia: F5 i `/detailed-status`
 
 1. Uruchom świeżą sesję `codex-v2` i zleć zadanie. Liczniki zbierają się od początku działania TUI, również przy zamkniętym panelu.
-2. Naciśnij **F5**, aby otworzyć live podgląd. Na Macu może być potrzebne **Fn+F5**. F3 pozostaje skrótem wyszukiwania. Jeśli własna konfiguracja zajmuje F5 (także jako początek skrótu wieloklawiszowego), ma pierwszeństwo; użyj wtedy komendy z następnego punktu.
-3. Wpisz **`/detailed-status`**, aby otworzyć szczegółowy panel. Komenda działa również podczas pracy agenta i nie wysyła promptu do modelu.
-4. Przewijaj strzałkami lub Page Up / Page Down. Zamknij panel **F5**, **Esc** albo **q** przy domyślnych skrótach.
+2. Pod polem wpisywania od razu zobaczysz live licznik: łączną liczbę tokenów, zużycie parenta i sumę subagentów.
+3. Naciśnij **F5**, aby ukryć albo ponownie pokazać licznik. Na Macu może być potrzebne **Fn+F5**. F3 pozostaje skrótem wyszukiwania. Jeśli własna konfiguracja zajmuje F5 (także jako początek skrótu wieloklawiszowego), ma pierwszeństwo.
+4. Wpisz **`/detailed-status`**, aby otworzyć szczegółowy panel z podziałem na agentów, modele, reasoning, czasy pracy oraz tokeny. Komenda działa również podczas pracy agenta i nie wysyła promptu do modelu.
+5. W szczegółowym panelu przewijaj strzałkami lub Page Up / Page Down. Zamknij go **F5**, **Esc** albo **q** przy domyślnych skrótach.
 
-Podgląd pokazuje parenta, sumę subagentów (również zagnieżdżonych), sumę całej sesji oraz podział na modele. Szczegóły dodają nazwy i identyfikatory agentów, ich parentów, status, bieżący model, zużycie według modelu, liczbę obserwowanych tur i łączny czas tych tur. Wyniki zakończonych i zamkniętych agentów pozostają w zestawieniu do zamknięcia TUI. Przełączenie na subagenta zachowuje zakres całej jego sesji.
+Podgląd pokazuje parenta, sumę subagentów (również zagnieżdżonych), sumę całej sesji oraz podział na modele. Szczegóły dodają nazwy i identyfikatory agentów, ich parentów, status, bieżący model, poziom reasoning, zużycie według modelu, liczbę obserwowanych tur i łączny czas tych tur. Wyniki zakończonych i zamkniętych agentów pozostają w zestawieniu do zamknięcia TUI. Przełączenie na subagenta zachowuje zakres całej jego sesji.
 
 „Koszt” oznacza tu **tokeny**, nie kwotę w USD ani procent limitu abonamentu. `input` obejmuje `cached`, a `output` obejmuje `reasoning`; suma to `input + output`. Liczniki aktualizują się po odpowiedzi modelu, kiedy serwer zgłasza zużycie. Czas obejmuje narzędzia i oczekiwanie, nie tylko inferencję. Sam panel odświeża ekran lokalnie, bez dodatkowych zapytań do modeli i bez pollingu subagentów. Dla nowo wykrytego wątku, którego metadanych jeszcze nie zna, wykonuje jednorazowy odczyt z app-servera, aby ustalić parenta i model.
 
-Zakres pomiaru: panel korzysta z wątków i zdarzeń obserwowanych przez bieżące TUI. Po wznowieniu sesji nie odtwarza kompletnego historycznego drzewa agentów ani ich czasów pracy. Wcześniejsze tokeny bez pewnego przypisania do modelu trafiają do `unknown / before observation`. Nieudany odczyt metadanych, przerwa w zdarzeniach, cofnięcie historii lub osiągnięcie limitu śledzenia oznacza dane jako `Partial data`. Brak zgłoszonego zużycia nie jest dowodem zerowego kosztu.
+Zakres pomiaru: panel korzysta z wątków i zdarzeń obserwowanych przez bieżące TUI. Po wznowieniu sesji nie odtwarza kompletnego historycznego drzewa agentów ani ich czasów pracy. Wcześniejsze tokeny bez pewnego przypisania do modelu trafiają do `unknown / before observation`. Jeśli nie uda się wczytać metadanych subagenta, zmieni się historia albo zostanie osiągnięty limit śledzenia, panel wyświetli konkretną uwagę o możliwie niepełnych szczegółach. Brak zgłoszonego zużycia nie jest dowodem zerowego kosztu.
 
 Do porównania starego i nowego flow uruchom dwa świeże wątki z tym samym zadaniem i modelami. Po zakończeniu sprawdź `/detailed-status`, szczególnie `Parent`, jego `input`, `cached` i `output`, oraz osobno sumę `Subagents`. Zapisz wynik przed zamknięciem TUI; zestawienie nie jest osobnym trwałym raportem.
 

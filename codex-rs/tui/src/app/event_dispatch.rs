@@ -2573,7 +2573,12 @@ impl App {
                     ));
                 }
             }
-            AppEvent::OpenSessionUsage { detailed } => self.open_session_usage(tui, detailed)?,
+            AppEvent::OpenSessionUsage { detailed: true } => {
+                self.open_session_usage(tui, /*detailed*/ true)?
+            }
+            AppEvent::OpenSessionUsage { detailed: false } => {
+                self.toggle_session_usage_live(tui)
+            }
             AppEvent::OpenAgentsOverview => self.open_agents_overview(app_server),
             AppEvent::NewAgentsOverviewSession { cwd } => {
                 return Box::pin(self.new_agents_overview_session(tui, app_server, cwd)).await;

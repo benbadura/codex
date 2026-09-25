@@ -11,6 +11,7 @@ use super::App;
 use codex_app_server_protocol::ServerNotification;
 use codex_app_server_protocol::Thread;
 use codex_app_server_protocol::TokenUsageBreakdown;
+use codex_protocol::openai_models::ReasoningEffort;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -63,6 +64,7 @@ struct AgentUsage {
     parent: Option<String>,
     name: String,
     model: String,
+    reasoning_effort: Option<ReasoningEffort>,
     status: String,
     previous: Option<Tokens>,
     models: BTreeMap<String, Tokens>,
@@ -166,6 +168,7 @@ impl SessionUsage {
         } else if agent.model.is_empty() {
             agent.model = UNKNOWN.to_string();
         }
+        agent.reasoning_effort.clone_from(&thread.reasoning_effort);
         agent.status = format!("{:?}", thread.status);
     }
 
@@ -196,7 +199,10 @@ impl SessionUsage {
                 &event.turn_id,
             ),
             ServerNotification::ThreadSettingsUpdated(event) => {
-                agent.model.clone_from(&event.thread_settings.model)
+                agent.model.clone_from(&event.thread_settings.model);
+                agent
+                    .reasoning_effort
+                    .clone_from(&event.thread_settings.effort);
             }
             ServerNotification::ModelRerouted(event) => agent.model.clone_from(&event.to_model),
             ServerNotification::TurnStarted(event) => {
@@ -250,7 +256,7 @@ impl SessionUsage {
         }
     }
 
-    fn root(&self, id: &str) -> String {
+    pub(in crate::app) fn root(&self, id: &str) -> String {
         let mut root = id;
         for _ in 0..self.agents.len() {
             let Some(parent) = self
@@ -278,9 +284,19 @@ impl App {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         // The primary thread may have been attached before the notification subscription.
         if let Some(id) = self.chat_widget.thread_id() {
+            let selected_is_primary = self.primary_thread_id == Some(id);
             let agent = usage.agents.entry(id.to_string()).or_default();
             if agent.model.is_empty() {
                 agent.model = self.chat_widget.current_model().to_string();
+            }
+            if agent.reasoning_effort.is_none() {
+                agent.reasoning_effort = self.chat_widget.current_reasoning_effort();
+            }
+            // The primary thread is already represented by ChatWidget. Avoid a redundant
+            // thread/read whose timeout would incorrectly mark otherwise complete live usage
+            // as partial.
+            if selected_is_primary {
+                agent.metadata_requested = true;
             }
         }
         usage.observe(notification);

@@ -18,7 +18,7 @@ expression: terminal.backend()
 "Agents · completed agents remain included                                                           "
 "Parent: Coordinator                                                                                 "
 "  ID parent · parent —                                                                              "
-"  Completed · current model astra · 0 observed turns · active time 0.0s                             "
+"  Completed · current model astra · reasoning unknown · 0 observed turns · active time 0.0s         "
 "  astra: 110 total · 100 input · 0 cached · 10 output                                               "
 "    reasoning 0 (included in output) · cache writes 0 (provider counter)                            "
 "                                                                                                    "

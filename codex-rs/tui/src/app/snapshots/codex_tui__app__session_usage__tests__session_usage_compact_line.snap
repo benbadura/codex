@@ -1,0 +1,5 @@
+---
+source: tui/src/app/session_usage_tests.rs
+expression: terminal.backend()
+---
+"Tokens 1.77K total · parent 1.1K · subagents 675 · F5 hide · /detailed-status                       "

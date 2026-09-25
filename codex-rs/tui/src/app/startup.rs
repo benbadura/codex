@@ -814,6 +814,7 @@ See the Codex keymap documentation for supported actions and examples."
             agent_navigation: AgentNavigationState::default(),
             agents_overview: Default::default(),
             session_usage: Default::default(),
+            session_usage_live_visible: true,
             side_threads: HashMap::new(),
             abandoned_side_threads: HashSet::new(),
             active_thread_id: None,

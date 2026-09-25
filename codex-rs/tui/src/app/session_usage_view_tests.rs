@@ -43,6 +43,18 @@ async fn session_usage_opens_for_selected_thread_and_f5_closes_it() {
 }
 
 #[tokio::test]
+async fn f5_action_toggles_inline_usage_without_opening_an_overlay() {
+    let mut app = crate::app::test_support::make_test_app().await;
+    let tui = crate::tui::test_support::make_test_tui().expect("tui");
+    assert!(!app.session_usage_live_visible);
+    app.toggle_session_usage_live(&tui);
+    assert!(app.session_usage_live_visible);
+    assert!(app.overlay.is_none());
+    app.toggle_session_usage_live(&tui);
+    assert!(!app.session_usage_live_visible);
+}
+
+#[tokio::test]
 async fn live_view_reads_new_usage_and_grows_without_reopening() {
     let tui = crate::tui::test_support::make_test_tui().expect("tui");
     let usage = Arc::new(Mutex::new(SessionUsage::default()));

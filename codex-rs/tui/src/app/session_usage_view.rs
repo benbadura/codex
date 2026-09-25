@@ -30,9 +30,42 @@ struct UsageView {
 }
 
 impl SessionUsage {
-    pub(super) fn lines(&self, root: &str, detailed: bool, now: Instant) -> Vec<Line<'static>> {
+    fn totals(&self, root: &str) -> (Tokens, Tokens) {
         let mut parent = Tokens::default();
         let mut children = Tokens::default();
+        for (id, agent) in self.agents.iter().filter(|(id, _)| self.root(id) == root) {
+            for tokens in agent.models.values() {
+                if id == root {
+                    parent.add(*tokens);
+                } else {
+                    children.add(*tokens);
+                }
+            }
+        }
+        (parent, children)
+    }
+
+    pub(in crate::app) fn compact_line(&self, root: &str, toggle_key: &str) -> Line<'static> {
+        let (parent, children) = self.totals(root);
+        let mut total = parent;
+        total.add(children);
+        let total = total.input.saturating_add(total.output);
+        let parent = parent.input.saturating_add(parent.output);
+        let children = children.input.saturating_add(children.output);
+        vec![
+            "Tokens ".bold(),
+            format!("{} total", crate::status::format_tokens_compact(total)).bold(),
+            " · parent ".dim(),
+            crate::status::format_tokens_compact(parent).into(),
+            " · subagents ".dim(),
+            crate::status::format_tokens_compact(children).into(),
+            format!(" · {toggle_key} hide · /detailed-status").dim(),
+        ]
+        .into()
+    }
+
+    pub(super) fn lines(&self, root: &str, detailed: bool, now: Instant) -> Vec<Line<'static>> {
+        let (parent, children) = self.totals(root);
         let mut models: BTreeMap<(&str, &str), Tokens> = BTreeMap::new();
         let agents: Vec<_> = self
             .agents
@@ -47,11 +80,6 @@ impl SessionUsage {
             };
             for (model, tokens) in &agent.models {
                 models.entry((role, model)).or_default().add(*tokens);
-                if role == "Parent" {
-                    parent.add(*tokens);
-                } else {
-                    children.add(*tokens);
-                }
             }
         }
         let mut total = parent;
@@ -106,9 +134,15 @@ impl SessionUsage {
                 );
                 lines.push(
                     format!(
-                        "  {} · current model {} · {} observed turns · active time {:.1}s",
+                        "  {} · current model {} · reasoning {} · {} observed turns · active time {:.1}s",
                         agent.status,
                         agent.model,
+                        agent
+                            .reasoning_effort
+                            .as_ref()
+                            .map(ToString::to_string)
+                            .as_deref()
+                            .unwrap_or("unknown"),
                         agent.turns.len(),
                         agent.elapsed_ms(now) as f64 / 1000.0
                     )
@@ -135,7 +169,7 @@ impl SessionUsage {
         lines.push("Input includes cached input; total = input + output. Cache and reasoning are not added twice.".dim().into());
         lines.push("Unknown = history/model attribution unavailable. Closed agents are retained until this TUI exits.".dim().into());
         if self.incomplete {
-            lines.push(Line::from("Partial data: missing metadata, event gap, history reset or tracking limit reached.").style(crate::style::status_style(crate::style::StatusTone::Attention)));
+            lines.push(Line::from("Some agent details may be incomplete because metadata could not be loaded, history changed, or the tracking limit was reached.").style(crate::style::status_style(crate::style::StatusTone::Attention)));
         }
         lines
     }
@@ -177,6 +211,11 @@ impl Renderable for UsageView {
 }
 
 impl App {
+    pub(in crate::app) fn toggle_session_usage_live(&mut self, tui: &Tui) {
+        self.session_usage_live_visible = !self.session_usage_live_visible;
+        tui.frame_requester().schedule_frame();
+    }
+
     pub(in crate::app) fn open_session_usage(
         &mut self,
         tui: &mut Tui,
@@ -198,6 +237,9 @@ impl App {
             let agent = usage.agents.entry(id.to_string()).or_default();
             if agent.model.is_empty() {
                 agent.model = self.chat_widget.current_model().to_string();
+            }
+            if agent.reasoning_effort.is_none() {
+                agent.reasoning_effort = self.chat_widget.current_reasoning_effort();
             }
             if agent.previous.is_none() && !agent.reset {
                 let tokens = self.chat_widget.token_usage();
