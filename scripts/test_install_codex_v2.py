@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import sqlite3
 import subprocess
@@ -92,20 +93,48 @@ class InstallCodexV2Test(unittest.TestCase):
         self.assertEqual(len(list(first.parent.iterdir())), 1)
 
     def test_release_bundle_installs_without_package_argument(self):
+        system = platform.system().lower()
+        architecture = {
+            "amd64": "x86_64",
+            "arm64": "aarch64",
+        }.get(platform.machine().lower(), platform.machine().lower())
+        target_suffix = {
+            "darwin": "apple-darwin",
+            "linux": "unknown-linux-gnu",
+            "windows": "pc-windows-msvc",
+        }.get(system)
+        if target_suffix is None:
+            self.skipTest(f"unsupported test host: {system}")
+        metadata_path = self.package / "codex-package.json"
+        metadata = json.loads(metadata_path.read_text())
+        metadata["target"] = f"{architecture}-{target_suffix}"
+        metadata_path.write_text(json.dumps(metadata))
+        windows = system == "windows"
+        if windows:
+            for name in ("codex", "codex-code-mode-host"):
+                binary = self.package / "bin" / name
+                binary.rename(binary.with_suffix(".exe"))
         bundled_installer = self.package / "install-codex-v2.py"
         shutil.copy2(INSTALLER, bundled_installer)
         release_home = Path(self.temp.name) / "release-home"
         release_home.mkdir()
         result = subprocess.run(
             [sys.executable, str(bundled_installer), "--no-clone-state"],
-            env={**os.environ, "HOME": str(release_home)},
-            check=True,
+            env={
+                **os.environ,
+                "HOME": str(release_home),
+                "USERPROFILE": str(release_home),
+            },
+            check=False,
             capture_output=True,
             text=True,
         )
-        wrapper = release_home / ".local/bin/codex-v2"
+        self.assertEqual(result.returncode, 0, result.stderr)
+        wrapper_name = "codex-v2.cmd" if windows else "codex-v2"
+        wrapper = release_home / ".local/bin" / wrapper_name
         self.assertTrue(wrapper.is_file(), result.stdout)
-        self.assertTrue((release_home / ".local/lib/codex-v2/current").is_symlink())
+        current = release_home / ".local/lib/codex-v2/current"
+        self.assertEqual(current.is_symlink(), not windows)
         self.assertIn("Zainstalowano pakiet", result.stdout)
 
     def test_windows_package_creates_cmd_wrapper_without_symlink(self):
