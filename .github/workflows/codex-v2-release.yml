@@ -98,6 +98,7 @@ jobs:
             scripts.codex_package.test_archive \
             scripts.codex_package.test_cargo \
             scripts.codex_package.test_layout \
+            scripts.test_build_codex_v2_release_asset \
             scripts.test_install_codex_v2
 
   build:
@@ -152,35 +153,13 @@ jobs:
         run: |
           set -euo pipefail
           source_archive="dist/${TARGET}/codex-package-${TARGET}.tar.gz"
-          package_dir="${RUNNER_TEMP}/codex-v2"
           asset_dir="${GITHUB_WORKSPACE}/codex-v2-release-assets"
           asset="${asset_dir}/codex-v2-${PACKAGE_VERSION}-${TARGET}.tar.gz"
 
-          mkdir -p "${package_dir}" "${asset_dir}"
-          tar -xzf "${source_archive}" -C "${package_dir}"
-          cp scripts/install_codex_v2.py "${package_dir}/install-codex-v2.py"
-          cp scripts/codex_v2_release_README.md "${package_dir}/README.md"
-          tar -czf "${asset}" -C "${RUNNER_TEMP}" codex-v2
-
-          python3 - "${asset}" "${TARGET}" <<'PY'
-          import sys
-          import tarfile
-
-          archive, target = sys.argv[1:]
-          suffix = ".exe" if "windows" in target else ""
-          required = {
-              f"codex-v2/bin/codex{suffix}",
-              f"codex-v2/bin/codex-code-mode-host{suffix}",
-              "codex-v2/codex-package.json",
-              "codex-v2/install-codex-v2.py",
-              "codex-v2/README.md",
-          }
-          with tarfile.open(archive, "r:gz") as bundle:
-              names = set(bundle.getnames())
-          missing = required - names
-          if missing:
-              raise SystemExit(f"{target}: release bundle is missing {sorted(missing)}")
-          PY
+          python3 scripts/build_codex_v2_release_asset.py \
+            --source-archive "${source_archive}" \
+            --output "${asset}" \
+            --target "${TARGET}"
 
       - name: Upload release candidate
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
