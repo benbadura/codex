@@ -5,6 +5,10 @@ inputs:
     description: Install just for workflows that invoke repository recipes.
     required: false
     default: "true"
+  use-dev-drive:
+    description: Store Windows build output on a dedicated Dev Drive.
+    required: false
+    default: "true"
 outputs:
   bazel-output-base:
     description: Filesystem path used for Bazel's output base.
@@ -16,13 +20,20 @@ outputs:
 runs:
   using: composite
   steps:
-    # setup-ci expects either this step or the Unix fallback below to define
-    # CI_BUILD_ROOT. Windows uses a Dev Drive because Cargo and Bazel
-    # spend significant time reading and writing build/cache trees.
+    # setup-ci expects one platform-specific step below to define CI_BUILD_ROOT.
+    # Windows normally uses a Dev Drive because Cargo and Bazel spend significant
+    # time reading and writing build/cache trees.
     - name: Configure Dev Drive (Windows)
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && inputs.use-dev-drive == 'true'
       shell: pwsh
       run: ./.github/scripts/setup-dev-drive.ps1
+
+    - name: Configure standard build root (Windows)
+      if: runner.os == 'Windows' && inputs.use-dev-drive != 'true'
+      shell: bash
+      run: |
+        build_root="$(cygpath -m "$RUNNER_TEMP")/codex-ci"
+        echo "CI_BUILD_ROOT=$build_root" >> "$GITHUB_ENV"
 
     - name: Configure CI build root (Unix)
       if: runner.os != 'Windows'
