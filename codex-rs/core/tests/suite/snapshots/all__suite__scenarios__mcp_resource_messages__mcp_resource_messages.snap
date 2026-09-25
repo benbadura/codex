@@ -82,7 +82,7 @@ Settings:
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When calling `wait_agent`, prefer longer waits (minutes) to avoid busy polling.
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 

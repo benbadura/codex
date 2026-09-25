@@ -6,7 +6,7 @@ Scenario: Astra starts in one workspace, switches for the next step of the activ
 
 ## Window 1
 -- request 1 (turn) --
-00:additional_tools/developer (3; hash=7f35bf0e99e676f7):
+00:additional_tools/developer (3; hash=b1e101cdca5088a0):
         - namespace/functions; hash=dead25325ac79c67
           - custom/exec
           - function/wait
@@ -14,7 +14,7 @@ Scenario: Astra starts in one workspace, switches for the next step of the activ
           - function/request_user_input_async
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
-        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=a3848c0be9c1253d
+        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=fd994b11525da73c
           - function/followup_task
           - function/interrupt_agent
           - function/list_agents
@@ -86,7 +86,7 @@ Scenario: Astra starts in one workspace, switches for the next step of the activ
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 

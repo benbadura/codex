@@ -1,7 +1,7 @@
 //! Shared argument parsing and dispatch for the v2 agent messaging tools.
 //!
-//! Actionable messages share the same submission path and preserve the target wake mode.
-//! Progress reports use UI activity instead of creating `InterAgentCommunication` input.
+//! `send_message` and `followup_task` share the same submission path and differ only in whether the
+//! resulting `InterAgentCommunication` should wake the target immediately.
 
 use super::analytics::ToolCallAnalytics;
 use super::*;
@@ -19,16 +19,6 @@ use crate::tools::context::FunctionToolOutput;
 pub(crate) struct SendMessageArgs {
     pub(crate) target: String,
     pub(crate) message: String,
-    #[serde(default)]
-    pub(crate) kind: MessageKind,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum MessageKind {
-    #[default]
-    Message,
-    Progress,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,7 +42,6 @@ pub(super) fn message_content(message: String) -> Result<String, FunctionCallErr
 pub(super) async fn handle_message_string_tool(
     invocation: ToolInvocation,
     mode: MessageDeliveryMode,
-    kind: MessageKind,
     target: String,
     message: String,
     analytics: &mut ToolCallAnalytics,
@@ -76,14 +65,9 @@ pub(super) async fn handle_message_string_tool(
             caller: session.thread_id,
             target: AgentTarget::Id(receiver_thread_id),
             resume_config,
-            input: match kind {
-                MessageKind::Message => AgentInput::Message {
-                    message: agent_message_from_tool(message, &source),
-                    mode,
-                },
-                // Progress text stays in the sender's tool call history. Never send
-                // plaintext or encrypted progress content to the recipient's model.
-                MessageKind::Progress => AgentInput::Progress,
+            input: AgentInput::Message {
+                message: agent_message_from_tool(message, &source),
+                mode,
             },
             start_options: TurnStartOptions {
                 parent_turn_id: (mode == MessageDeliveryMode::TriggerTurn)

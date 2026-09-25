@@ -1,6 +1,5 @@
 ---
 source: core/tests/suite/compact.rs
-assertion_line: 4537
 expression: "format_history_snapshot(\"Real paginated mid-turn compaction and cold resume from the bounded suffix.\",\n&requests,)"
 ---
 Scenario: Real paginated mid-turn compaction and cold resume from the bounded suffix.
@@ -23,7 +22,7 @@ Scenario: Real paginated mid-turn compaction and cold resume from the bounded su
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 
@@ -51,7 +50,7 @@ Scenario: Real paginated mid-turn compaction and cold resume from the bounded su
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 
@@ -83,7 +82,7 @@ Scenario: Real paginated mid-turn compaction and cold resume from the bounded su
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 

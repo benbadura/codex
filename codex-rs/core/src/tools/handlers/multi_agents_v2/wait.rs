@@ -50,11 +50,6 @@ impl Handler {
         } = invocation;
         let arguments = function_arguments(payload)?;
         let args: WaitArgs = parse_arguments(&arguments)?;
-        if args.mode == WaitMode::UntilEvent && args.timeout_ms.is_some() {
-            return Err(FunctionCallError::RespondToModel(
-                "until_event does not accept timeout_ms".to_string(),
-            ));
-        }
         let min_timeout_ms = turn.config.multi_agent_v2.min_wait_timeout_ms;
         let max_timeout_ms = turn.config.multi_agent_v2.max_wait_timeout_ms;
         let default_timeout_ms = turn.config.multi_agent_v2.default_wait_timeout_ms;
@@ -96,12 +91,11 @@ impl Handler {
             )
             .await;
 
-        let deadline = match args.mode {
-            WaitMode::Timeout => Some(Instant::now() + Duration::from_millis(timeout_ms as u64)),
-            WaitMode::UntilEvent => None,
-        };
+        let wait_until_event = requested_timeout_ms.is_none();
+        let deadline =
+            requested_timeout_ms.map(|_| Instant::now() + Duration::from_millis(timeout_ms as u64));
         let outcome = async {
-            if args.mode == WaitMode::UntilEvent && pending_activity.is_none() {
+            if wait_until_event && pending_activity.is_none() {
                 session
                     .services
                     .local_agent_runtime
@@ -184,17 +178,7 @@ impl CoreToolRuntime for Handler {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WaitArgs {
-    #[serde(default)]
-    mode: WaitMode,
     timeout_ms: Option<i64>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum WaitMode {
-    #[default]
-    Timeout,
-    UntilEvent,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]

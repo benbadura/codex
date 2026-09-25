@@ -1832,7 +1832,7 @@ async fn multi_agent_v2_send_message_rejects_interrupt_parameter() {
         panic!("expected model-facing parse error");
     };
     assert!(message.starts_with(
-        "failed to parse function arguments: unknown field `interrupt`, expected one of `target`, `message`, `kind`"
+        "failed to parse function arguments: unknown field `interrupt`, expected `target` or `message`"
     ));
 
     let ops = manager.captured_ops();
@@ -3097,8 +3097,15 @@ async fn multi_agent_v2_wait_agent_accepts_explicit_timeout_at_configured_min() 
 }
 
 #[tokio::test]
-async fn multi_agent_v2_wait_agent_uses_configured_default_timeout() {
-    let (session, mut turn) = make_session_and_context().await;
+async fn multi_agent_v2_wait_agent_without_timeout_reports_no_active_agents() {
+    let (mut session, mut turn) = make_session_and_context().await;
+    let manager = thread_manager();
+    let root = manager
+        .start_thread(StartThreadOptions::new((*turn.config).clone()))
+        .await
+        .expect("root thread should start");
+    set_agent_control(&mut session, manager.agent_control());
+    session.thread_id = root.thread_id;
     let mut config = (*turn.config).clone();
     config
         .features
@@ -3108,44 +3115,23 @@ async fn multi_agent_v2_wait_agent_uses_configured_default_timeout() {
     config.multi_agent_v2.max_wait_timeout_ms = 1_000;
     config.multi_agent_v2.default_wait_timeout_ms = 50;
     set_turn_config(&mut turn, config);
-    let session = Arc::new(session);
-    let turn = Arc::new(turn);
-
-    let early = timeout(
-        Duration::from_millis(/*millis*/ 20),
-        WaitAgentHandlerV2::default().handle(invocation(
-            session.clone(),
-            turn.clone(),
+    let output = WaitAgentHandlerV2::default()
+        .handle(invocation(
+            Arc::new(session),
+            Arc::new(turn),
             "wait_agent",
             function_payload(json!({})),
-        )),
-    )
-    .await;
-    assert!(
-        early.is_err(),
-        "wait_agent should not return before the configured default timeout"
-    );
-
-    let output = timeout(
-        Duration::from_secs(/*secs*/ 1),
-        WaitAgentHandlerV2::default().handle(invocation(
-            session,
-            turn,
-            "wait_agent",
-            function_payload(json!({})),
-        )),
-    )
-    .await
-    .expect("configured default should be shorter than the test timeout")
-    .expect("wait_agent should succeed");
+        ))
+        .await
+        .expect("wait_agent should succeed");
     let (content, success) = expect_text_output(output);
     let result: crate::tools::handlers::multi_agents_v2::wait::WaitAgentResult =
         serde_json::from_str(&content).expect("wait_agent result should be json");
     assert_eq!(
         result,
         crate::tools::handlers::multi_agents_v2::wait::WaitAgentResult {
-            message: "Wait timed out.".to_string(),
-            timed_out: true,
+            message: "no_active_agents".to_string(),
+            timed_out: false,
         }
     );
     assert_eq!(success, None);
@@ -3172,7 +3158,7 @@ async fn multi_agent_v2_wait_agent_allows_zero_configured_timeout() {
             session,
             turn,
             "wait_agent",
-            function_payload(json!({})),
+            function_payload(json!({"timeout_ms": 0})),
         )),
     )
     .await

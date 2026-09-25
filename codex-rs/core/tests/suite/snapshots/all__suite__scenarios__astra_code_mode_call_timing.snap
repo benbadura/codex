@@ -6,7 +6,7 @@ Scenario: Astra receives host and handler timings on completed and failed code-m
 
 ## Window 1
 -- request 1 (turn) --
-00:additional_tools/developer (3; hash=3f44db0c9a71d5dd):
+00:additional_tools/developer (3; hash=32be5470c6e39932):
         - namespace/functions; hash=e7db0a45c4ec3157
           - custom/exec
           - function/wait
@@ -14,7 +14,7 @@ Scenario: Astra receives host and handler timings on completed and failed code-m
           - function/request_user_input_async
         - namespace/clock: Tools for reading and waiting on time.; hash=f402e8c5e9b5e317
           - function/sleep
-        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=a3848c0be9c1253d
+        - namespace/collaboration: Tools for spawning and managing sub-agents.; hash=fd994b11525da73c
           - function/followup_task
           - function/interrupt_agent
           - function/list_agents
@@ -73,7 +73,7 @@ Scenario: Astra receives host and handler timings on completed and failed code-m
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
 
-    When your own work is finished and you are waiting for agents, use `wait_agent` with `mode: "until_event...rogress text is not delivered to the recipient model. [hash=5c7f70a57aac800f]
+    When your own work is finished and you are waiting for agents, call `wait_agent` without `timeout_ms`. I...ents`; use it for deliberate inspection or diagnosis. [hash=5348fdd1619284d5]
 
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
 

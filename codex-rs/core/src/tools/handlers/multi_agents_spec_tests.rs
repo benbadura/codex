@@ -379,6 +379,7 @@ fn send_message_tool_requires_message_and_has_no_output_schema() {
     );
     assert!(!properties.contains_key("interrupt"));
     assert!(!properties.contains_key("items"));
+    assert!(!properties.contains_key("kind"));
     assert_eq!(
         properties
             .get("target")
@@ -457,6 +458,7 @@ fn wait_agent_tool_v2_uses_timeout_only_summary_output() {
         .as_ref()
         .expect("wait_agent should use object params");
     assert!(!properties.contains_key("targets"));
+    assert!(!properties.contains_key("mode"));
     assert!(properties.contains_key("timeout_ms"));
     assert!(description.contains(
         "Does not return the content; returns either a summary of which agents have updates (if any)"
