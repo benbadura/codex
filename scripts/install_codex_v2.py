@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shlex
 import shutil
@@ -20,6 +21,29 @@ SAFE_BUILD_PART = re.compile(r"^[A-Za-z0-9._-]+$")
 
 def is_windows_target(target: str) -> bool:
     return "windows" in target
+
+
+def validate_host_target(target: str, host: tuple[str, str]) -> None:
+    system, machine = (value.lower() for value in host)
+    architecture = {
+        "amd64": "x86_64",
+        "arm64": "aarch64",
+    }.get(machine, machine)
+    platform_marker = {
+        "darwin": "apple-darwin",
+        "linux": "unknown-linux",
+        "windows": "pc-windows",
+    }.get(system)
+    if (
+        platform_marker is not None
+        and target.startswith(f"{architecture}-")
+        and platform_marker in target
+    ):
+        return
+    raise ValueError(
+        f"Pakiet dla targetu {target} nie pasuje do tego komputera "
+        f"({system}/{architecture}). Pobierz właściwy artefakt release'a."
+    )
 
 
 def validate_package(package: Path) -> tuple[Path, str, str]:
@@ -161,8 +185,17 @@ def clone_state(source: Path, destination: Path) -> None:
             print(f"  {name}")
 
 
-def install(package: Path, home: Path, source: Path, clone: bool | None) -> None:
+def install(
+    package: Path,
+    home: Path,
+    source: Path,
+    clone: bool | None,
+    *,
+    host: tuple[str, str] | None = None,
+) -> None:
     package, build_id, target = validate_package(package)
+    if host is not None:
+        validate_host_target(target, host)
     windows = is_windows_target(target)
     destination = home / ".codex-v2"
     current = home / ".local/lib/codex-v2/current"
@@ -261,7 +294,11 @@ def main() -> int:
     args = parser.parse_args()
     try:
         install(
-            args.package_dir, Path.home(), args.source_home.expanduser(), args.clone
+            args.package_dir,
+            Path.home(),
+            args.source_home.expanduser(),
+            args.clone,
+            host=(platform.system(), platform.machine()),
         )
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"Błąd instalacji: {error}", file=sys.stderr)

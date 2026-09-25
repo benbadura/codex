@@ -48,8 +48,13 @@ class InstallCodexV2Test(unittest.TestCase):
         redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)
 
-    def install(self, clone=None):
-        installer.install(self.package, self.home, self.source, clone)
+    def install(self, clone=None, *, host=None):
+        installer.install(self.package, self.home, self.source, clone, host=host)
+
+    def test_rejects_package_for_a_different_host(self):
+        with self.assertRaisesRegex(ValueError, "nie pasuje do tego komputera"):
+            self.install(clone=False, host=("Windows", "AMD64"))
+        self.assertFalse(self.destination.exists())
 
     def test_prompt_yes_clones_and_wrapper_preserves_arguments(self):
         with (
